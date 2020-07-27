@@ -1,4 +1,4 @@
 orbisgis-scripts
 ================
 
-SQL and BeanShell scripts for OrbisGIS.
+This repository contains a set of scripts used by the OrbisGIS community.
