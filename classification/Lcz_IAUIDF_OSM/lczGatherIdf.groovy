@@ -1,7 +1,7 @@
 /*###########################################################################################
-This script identify the spatial relations between scales
-(here IAUIDF RSU definition and RSU definition according to OSM data).
-
+This script gathers tables from several cities to one selecting only :
+	-> some useful columns
+	-> spatial units having a certain level of uniqueness value
 #############################################################################################*/
 
 
@@ -54,7 +54,7 @@ def nbTableUnion = 100
 
 // START THE SCRIPT
 H2GIS datasource = H2GIS.open("/home/decide/Code/Intel/geoclimate/geoindicators/target/model/lczIdf;AUTO_SERVER=TRUE", "sa", "")
-/*def queryPartialGather = ""	
+def queryPartialGather = ""	
 def code
 
 def allVar2Keep = "*"
@@ -138,5 +138,5 @@ datasource.execute """  CREATE INDEX IF NOT EXISTS id_lcz ON ALL_LCZ USING BTREE
 						the_geom,
 						${explicativeVariables.join(',')}
 				FROM ALL_LCZ;"""
-*/
+
 datasource.execute """ CALL GEOJSONWRITE('/home/decide/Code/Intel/geoclimate/models/TRAINING_DATA_LCZ_OSM_RF_1_0.gz', 'ALL_LCZ_INT')"""

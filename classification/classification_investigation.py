@@ -23,7 +23,7 @@ import pydot
 from joblib import dump
 
 #Local functions
-import geoclimate_model_optimization as gmo
+import python_model_optimization as pmo
 
 # ==========================================================
 #PARAMETERS TO SET
@@ -102,7 +102,7 @@ for i in range(0,nb_fig):
     df2hist.hist(bins = bin_nb, ax = ax)
 
 # Test the transformations (transformation to a more "uniform distribution")
-df_test_transfo = gmo.AnalyseData.transfo2normal(df.drop(colNotIndic, axis = 1), transfo2apply)
+df_test_transfo = pmo.AnalyseData.transfo2normal(df.drop(colNotIndic, axis = 1), transfo2apply)
 for i in range(0,nb_fig):
     df2hist = df_test_transfo.loc[:, df_test_transfo.columns[i*nb_indic_per_fig:(i+1)*nb_indic_per_fig]]
     fig, ax = plt.subplots()
@@ -214,7 +214,7 @@ for s in scenari:
             #Transform the indicator distribution if needed
             if norm_indic is True:
                 "Distribution transformation is performed"
-                df_transf = gmo.AnalyseData.transfo2normal(df_indic.drop(colNotIndic,\
+                df_transf = pmo.AnalyseData.transfo2normal(df_indic.drop(colNotIndic,\
                                                              axis = 1), transfo2apply).join(df_indic[colNotIndic])
             elif norm_indic is False:
                 df_transf = df_indic.copy()
@@ -240,19 +240,19 @@ for s in scenari:
                             #Select data in order to have the same number of items
                             #per city and if final_distrib is "EQUALLY" the same number
                             #of items per class
-                            data2use_i = gmo.AnalyseData.select_from_data(data2use_cal, nb_data = nb_min_intra, final_distrib =\
+                            data2use_i = pmo.AnalyseData.select_from_data(data2use_cal, nb_data = nb_min_intra, final_distrib =\
                                                                           dist_class_typ, nb_data_class = nb_min_class, 
                                                                           uniqueness_threshold=thresh_uniqueness,
                                                                           uniqueness_col_name=uniqueness_val)
                             #Select for calibration a 'perc_bu_calib' building of the previous data2use_i
-                            df_calib = gmo.AnalyseData.select_from_data(data2use_i, nb_data = int(nb_min_intra*perc_bu_calib),\
+                            df_calib = pmo.AnalyseData.select_from_data(data2use_i, nb_data = int(nb_min_intra*perc_bu_calib),\
                                                                         final_distrib = "REPRESENTATIVE", 
                                                                         uniqueness_threshold=thresh_uniqueness,
                                                                         uniqueness_col_name=uniqueness_val).drop(uniqueness_val, axis = 1)
                             #Identify the index of the buildings that are not used for calibration
                             index_not_calib = data2use_i.index.difference(df_calib.index)
                             #Select for inter verif a 'perc_bu_calib' building of the previous data2use_i
-                            df_verif = gmo.AnalyseData.select_from_data(data2use_i.reindex(index_not_calib), nb_data = \
+                            df_verif = pmo.AnalyseData.select_from_data(data2use_i.reindex(index_not_calib), nb_data = \
                                                                         int(nb_min_intra*nb_min_bu_verif),\
                                                                         final_distrib = "REPRESENTATIVE", 
                                                                         uniqueness_threshold=thresh_uniqueness,
@@ -449,7 +449,7 @@ for algo2use in finalParam.keys():
     
     if dic_param["norm_indic"] is True:
         "Distribution transformation is performed"
-        df_transf = gmo.AnalyseData.transfo2normal(df_indic.drop(colNotIndic,\
+        df_transf = pmo.AnalyseData.transfo2normal(df_indic.drop(colNotIndic,\
                                                      axis = 1), transfo2apply).join(df_indic[colNotIndic])
     else:
         df_transf = df_indic.copy()
@@ -463,14 +463,14 @@ for algo2use in finalParam.keys():
                                      min_samples_leaf = min_size_node)
 
     
-    data2use_i = gmo.AnalyseData.select_from_data(df_transf, nb_data = nb_data2use,
+    data2use_i = pmo.AnalyseData.select_from_data(df_transf, nb_data = nb_data2use,
                                                   final_distrib = dist_class_typ, 
                                                   nb_data_class = np.nan, 
                                                   uniqueness_threshold=thresh_uniqueness,
                                                   uniqueness_col_name=uniqueness_val)
     
     #Select for calibration a 'perc_bu_calib' building of the previous data2use_i
-    df_calib = gmo.AnalyseData.select_from_data(data2use_i, nb_data = int(nb_data2use*perc_bu_calib),\
+    df_calib = pmo.AnalyseData.select_from_data(data2use_i, nb_data = int(nb_data2use*perc_bu_calib),\
                                                 final_distrib = "REPRESENTATIVE", 
                                                 uniqueness_threshold=thresh_uniqueness,
                                                 uniqueness_col_name=uniqueness_val).drop(uniqueness_val, axis = 1)
@@ -478,7 +478,7 @@ for algo2use in finalParam.keys():
     #Identify the index of the buildings that are not used for calibration
     index_not_calib = data2use_i.index.difference(df_calib.index)
     #Select for inter verif a 'perc_bu_calib' building of the previous data2use_i
-    df_verif = gmo.AnalyseData.select_from_data(data2use_i.reindex(index_not_calib), nb_data = \
+    df_verif = pmo.AnalyseData.select_from_data(data2use_i.reindex(index_not_calib), nb_data = \
                                                 int(nb_data2use*nb_min_bu_verif),\
                                                 final_distrib = "REPRESENTATIVE", 
                                                 uniqueness_threshold=thresh_uniqueness,
