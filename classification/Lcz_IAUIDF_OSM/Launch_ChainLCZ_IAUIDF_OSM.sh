@@ -44,7 +44,7 @@ currentFolder=${currentFolder:-$PWD}
 read -p"Please enter the absolute path of the 'classification' directory (if you press enter, get the parent directory of the current directory)" directoryClassif
 echo -e "You selected '$directoryClassif'\n\n"
 
-if [ -z "$directoryClassif"];
+if [ -z "$directoryClassif" ];
 then
 	directoryClassif=$PWD
 	cd $directoryClassif
@@ -55,19 +55,19 @@ fi
 
 # If the data should be recovered on a specific database, set database parameters
 read -p"Please enter the absolute url of the database where to find the data (Press enter if not concerned)" dbUrl
-if [ -z "$dbUrl"];
+if [ -z "$dbUrl" ];
 then
 	dbUrl="default"
 	dbId="default"
 	dbPassword="default"
 else
 	read -p"Please enter the ID to access the database" dbId
-	if [ -z "$dbId"];
+	if [ -z "$dbId" ];
 	then
 		dbId="default"
 	fi
 	read -p"Please enter the password corresponding to the ID you gave" dbPassword
-	if [ -z "$dbPassword"];
+	if [ -z "$dbPassword" ];
 	then
 		dbPassword="default"
 	fi
@@ -76,7 +76,7 @@ fi
 # Execute the script to calculate the independent variables
 echo -e "Groovy script is executing (calculation of the independent variables)...\n\n\n"
 
-groovy "./calculateIndependentVariables.groovy" $currentFolder $nameFileCities $outputFolder "OSM" $indicatorUse $dbUrl $dbId $dbPassword "$operationsToApply" $dependentVariablePath $dependentVariableColName $geometryField $sridDependentVarIndic $pathToSaveTrainingDataSet "$correspondenceTable" "$dependentVariable2ndColNameAndVal" $resetDataset $scaleTrainingDataset
+groovy "./calculateIndependentVariables.groovy" $currentFolder $nameFileCities $outputFolder $data $indicatorUse $dbUrl $dbId "$dbPassword" "$operationsToApply" $dependentVariablePath $dependentVariableColName $geometryField $sridDependentVarIndic $pathToSaveTrainingDataSet "$correspondenceTable" "$dependentVariable2ndColNameAndVal" $resetDataset $scaleTrainingDataset
 
 echo -e "\n\n\nThe calculation of the independent variables has been performed"
 
@@ -88,8 +88,6 @@ echo -e "Results from the sensitivity analysis (to identify the best configurati
 
 # Gather the results from all cities in one table selecting only independent variables that have been identified in the Python script and the spatial units having a minimum level of uniqueness.
 echo -e "Groovy script is executing (gather the results from all cities in a unique table which will be the training dataset)...\n\n\n"
-
-/home/decide/Code/Intel/geoclimate/models/TRAINING_DATA_LCZ_OSM_RF_1_0.gz
 
 
 

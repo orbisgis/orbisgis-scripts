@@ -74,8 +74,6 @@ class groovy_generic_function{
 			println Arrays.toString(listToBeDone)
 
 			// Create the config file
-			// Convert the 'indicatorUse' parameter to array of string
-
 			def worflow_parameters	
 			if(data=="OSM"){
 				worflow_parameters = [
@@ -141,7 +139,7 @@ class groovy_generic_function{
 													]
 											],
 							"output" :			[
-											"/home/decide/Data/URBIO/Donnees_brutes/LCZ/TrainingDataSets/Indicators/BDTOPO_V2"
+											"folder":"/home/decide/Data/URBIO/Donnees_brutes/LCZ/TrainingDataSets/Indicators/BDTOPO_V2"
 											],
 							"parameters":			[
 											"distance" : 1000,
@@ -159,8 +157,16 @@ class groovy_generic_function{
 
 			// Produce the indicators for the entire Ile de France and save results in files
 			produceIndicatorsForTest(configFilePath, data)
+
+			// Reset to default the informations to connect to the Paendora DB
+			if(data=="BDTOPO_V2"){
+				worflow_parameters["input"]["database"]["user"]="default"
+				worflow_parameters["input"]["database"]["user"]="password"
+				worflow_parameters["input"]["database"]["user"]="url"
+			}
 		}
 	}
+
 
 	/**
 	* Execute several cities where we have testsIProcess process = ProcessingChain.Workflow.BDTOPO_V2()
@@ -179,12 +185,14 @@ class groovy_generic_function{
 		}
 	}
 
+
 	/**
 	* Simple function to create a large number to set random filename 
 	* @return the number as String
 	*/
 	static def getUuid(){
 	    UUID.randomUUID().toString().replaceAll("-", "_") }
+
 
 	/**
 	* Create a configuration file
@@ -201,6 +209,123 @@ class groovy_generic_function{
 		} 
 		configFile.write(json)
 		return configFile.absolutePath
+	}
+
+
+	def unionCities(String inputDirectory, String optionalinputFilePrefix, String outputFilePathAndName, String dataset, Map thresholdColumn, String var2Model, String[] columnsToKeep, Map correspondenceTable){
+		/**
+		* Prepare and launch the Workflow (OSM or BDTOPO_V2) configuration file
+		* @param inputDirectory 		Path where the city files are stored (actually the parent directory of the folder containing the cities)
+		* @param optionalinputFilePrefix 	String to add at the end of the inputDirectory to get the right file (for example "/rsu_lcz.geojson" for the LCZ of BDTOPO_V2)
+		* @param outputFilePathAndName		Path where the resulting table containing all cities will be saved
+		* @param dataset 			The type of dataset that need to be unioned (OSM or BDTOPO_V2)
+		* @param thresholdColumn		Map containing as key a field name and as value a threshold value below which data will be removed				
+		* @param var2Model 			The name of the variable to model
+		* @param columnsToKeep			List of columns to keep (except the 'varToModel' which is automatically added)
+		* @param correspondenceTable		Map for converting the 'var2Model' values to a new set of values
+		*
+		* @return 				None
+		*/
+		def nbTableUnion = 100
+		def queryPartialGather = ""	
+		def code
+		def ratio
+
+		H2GIS datasource = H2GIS.open("${System.getProperty("java.io.tmpdir")+File.separator}cityUnion;AUTO_SERVER=TRUE", "sa", "")
+
+		// Keep only the 'var2Model' column if columnsToKeep is empty
+		def allVar2Keep = " $var2Model "
+		if (columnsToKeep){
+			allVar2Keep += ", ${columnsToKeep.join(", ")}"
+		}
+
+		//
+		def queryThresh = ""
+		if(thresholdColumn){
+			queryThresh = ", ${thresholdColumn.keySet()[0]}"
+		}
+
+
+		File[] processedAreaList = new File(inputDirectory+dataset).listFiles()
+		def i = 1
+		for (areaPath in processedAreaList){	
+			if ((i%nbTableUnion)==0){
+				ratio = i/nbTableUnion
+				datasource.execute """DROP TABLE IF EXISTS ALL_CITIES${ratio.trunc(0)}; CREATE TABLE ALL_CITIES${ratio.trunc(0)} AS ${queryPartialGather[0..-11]}"""
+				queryPartialGather = ""
+			}
+			if(dataset == "OSM"){
+				def fileName = areaPath.toString().split("/").last()
+				code = fileName[4..-1]
+				println "Load : '${code}', $i ème table"
+
+				// Load RSU indicators
+				datasource.load("$areaPath", "city$i", true)
+			}
+			if(dataset == "BDTOPO_V2"){
+				def folderName = areaPath.toString().split("/").last()
+				code = folderName[-6..-1]
+				println "Load : '${code}', $i ème table"
+
+				// Load RSU indicators
+				datasource.load("$areaPath$optionalinputFilePrefix", "city$i", true)
+			}	
+
+			queryPartialGather += " SELECT $allVar2Keep,  FROM city$i UNION ALL "
+			i+=1
+		}
+		ratio = (i/nbTableUnion).trunc(0)+1
+		datasource.execute """DROP TABLE IF EXISTS ALL_CITIES${ratio}; CREATE TABLE ALL_CITIES${ratio} AS ${queryPartialGather[0..-11]}"""
+
+		def tab_nb = []
+		i = 1
+		while (i<=ratio){
+			tab_nb.add(i)
+			i++
+		}
+
+		def queryGather = ""
+		datasource.execute """DROP TABLE IF EXISTS ALL_CITIES_WITH_THRESHOLD; 
+					CREATE TABLE ALL_CITIES_WITH_THRESHOLD 
+						AS SELECT $allVar2Keep $queryThresh 
+						FROM ALL_CITIES${tab_nb.join(" UNION ALL SELECT $allVar2Keep $queryThresh FROM ALL_CITIES")};
+					DROP TABLE IF EXISTS ALL_CITIES;"""
+		if(thresholdColumn){		
+			datasource.execute """  CREATE INDEX IF NOT EXISTS id_thresh ON ALL_CITIES_WITH_THRESHOLD USING BTREE(${thresholdColumn.keySet()[0]});
+						CREATE TABLE ALL_CITIES 
+							AS SELECT $allVar2Keep
+							FROM ALL_CITIES_WITH_THRESHOLD
+							WHERE ${thresholdColumn.keySet()[0]} > ${thresholdColumn.values()[0]};"""
+		}
+		else{
+			datasource.execute """ ALTER TABLE ALL_CITIES_WITH_THRESHOLD RENAME TO ALL_CITIES """
+		}
+		// The result will be saved as a geojson, thus need a geometry column
+		def queryGeom = ""
+		if(!columnsToKeep.contains("the_geom") && !columnsToKeep.contains("THE_GEOM")){
+			datasource.execute """ALTER TABLE ALL_CITIES ADD COLUMN the_geom GEOMETRY;"""
+			queryGeom = ", the_geom"
+		}
+
+		// Modify the LCZ values (String to Integer...)
+		def queryModifyValues 		
+		if(correspondenceTable){
+			queryModifyValues = """  CREATE INDEX IF NOT EXISTS id_lcz ON ALL_CITIES USING BTREE($var2Model);
+							DROP TABLE IF EXISTS ALL_CITIES_INT;
+							CREATE TABLE ALL_CITIES_INT
+								AS SELECT CAST("""
+			def endQuery = ""			
+			correspondenceTable.each{ini, fin ->
+				queryModifyValues += "CASE WHEN $var2Model='$ini' THEN '$fin' ELSE "
+				endQuery += " END "
+			}
+			queryModifyValues+= """ null $endQuery AS INTEGER) AS $var2Model $queryGeom, ${columnsToKeep.join(',')} FROM ALL_CITIES;"""
+		}
+		else{
+			queryModifyValues = """ ALTER TABLE ALL_CITIES RENAME TO ALL_CITIES_INT;"""
+		}
+
+		datasource.execute """ CALL GEOJSONWRITE('$outputFilePathAndName}.gz', 'ALL_CITIES_INT')"""
 	}
 }
 

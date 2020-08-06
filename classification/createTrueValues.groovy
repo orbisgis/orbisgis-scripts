@@ -26,7 +26,7 @@ ggf = new groovy_generic_function()
 /////////////////////////////////////////////////////////////////
 // Each argument is recovered in a variable understandable...
 def configFilePathProduceTrueValues = this.args[0]
-def pathCitiesToTreat = configFileWorkflowPath + File.separator + this.args[1]
+def pathCitiesToTreat = configFilePathProduceTrueValues + File.separator + this.args[1]
 def outputFolderTrueValueConfigFile = this.args[2]
 def dataTrueValues = this.args[3].toUpperCase()
 def dbUrlTrueValues = this.args[4]
@@ -35,6 +35,24 @@ def dbPasswordTrueValues = this.args[6]
 def pathToSaveTrueValues = this.args[7]
 Integer resetDatasetTrueValue = this.args[8]
 def indicatorUseTrueValue = this.args[9].replaceAll(" ", "").split(",")
+def correspondenceValMap = [:]
+if(this.args[10]){
+	correspondenceTableTrueValue = this.args[10].replaceAll(" ", "").split(",")
+	// Convert the list into a Map to have the key and corresponding value
+	correspondenceTableTrueValue.each{
+		def keyAndVal = it.split(":")
+		correspondenceValMap[keyAndVal[0]] = keyAndVal[1]
+	}
+}
+def optionalinputFilePrefix = this.args[11]
+def outputFilePathAndName = this.args[12]
+def thresholdColumn = [:]
+if(this.args[13]){
+	thresholdColumn[this.args[13].replaceAll(" ", "").split(":")[0]] = this.args[13].replaceAll(" ", "").split(":")[1]
+}
+def var2Model = this.args[14]
+def columnsToKeep = this.args[15].replaceAll(" ", "").split(",")
+
 
 // Define some table names
 def dependentVarTableName = "dependentVarTableName"
@@ -46,7 +64,6 @@ def dependentVarTableNameRaw = "dependentVarTableName_raw"
 // Prepare and launch the workflow
 ggf.executeWorkflow(configFilePathProduceTrueValues, pathCitiesToTreat, outputFolderTrueValueConfigFile, dataTrueValues, indicatorUseTrueValue, dbUrlTrueValues, dbIdTrueValues, dbPasswordTrueValues, resetDatasetTrueValue)
 
-// Open a database used for calculation and load the IAUIdF file (LCZ)
-H2GIS datasource = H2GIS.open("/tmp/trueValue${ggf.getUuid()};AUTO_SERVER=TRUE", "sa", "")
-datasource.load(dependentVariablePath, dependentVarTableNameRaw)
+// Gather all cities in a same file to create the TrueValue dataset
+ggf.unionCities(outputFolderTrueValueConfigFile, optionalinputFilePrefix, outputFilePathAndName, dataTrueValues, thresholdColumn, var2Model, columnsToKeep, correspondenceValMap)
 

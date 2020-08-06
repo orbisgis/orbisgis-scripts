@@ -18,13 +18,25 @@ nameFileCitiesIndep="allCitiesOSM.csv"
 ##############################################################"
 # Parameters to set
 ##############################################################
-# I. To create the dependent variable dataset
+# I. TO CREATE THE DEPENDENT VARIABLE DATASET
 dataTrueValues="BDTOPO_V2"
 # If 'resetDatasetTrueValue'=0, do not re-calculate the dependent variable for cities having already results stored in the 'outputFolderTrueValueConfigFile' folder
 resetDatasetTrueValue=0
 indicatorUseTrueValue="LCZ"
+# If you want to modify the initial TrueValue to an other system, fill in the correspondence table (if not leave "")
+correspondenceTableTrueValue=""
+# String to add at the end of the inputDirectory to get the right file (for example "/rsu_lcz.geojson" for the LCZ of BDTOPO_V2)
+optionalinputFilePrefix="/rsu_lcz.geojson"
+# Where to save the dataset that will be used as true values for the training
+outputFilePathAndName="/home/decide/Data/URBIO/Donnees_brutes/LCZ/BDTOPO_V2/IDF_LCZ_dataset20200806"
+# Map containing as key a field name and as value a threshold value below which data will be removed
+thresholdColumnTrueValue=""
+# The name of the variable to model
+var2ModelTrueValue="LCZ1"
+# List of columns to keep (except the 'varToModel' which is automatically added)
+columnsToKeep="THE_GEOM,LCZ2"
 
-# II. To create the whole training dataset
+# II. TO CREATE THE WHOLE TRAINING DATASET
 # Scale of the dataset used to train the model (possible values: "BUILDING" or "RSU")
 scaleTrainingDataset="RSU"
 # If 'scaleTrainingDataset="RSU"', operations to apply to go gather indicators to a unique scale (see the documentation concerning the IProcess unweightedOperationFromLowerScale() to know which parameters are accepted)
@@ -53,9 +65,9 @@ echo -e "You selected '$currentFolder'\n\n"
 currentFolder=${currentFolder:-$PWD}
 
 read -p"Please enter the absolute path of the 'classification' directory (if you press enter, get the parent directory of the current directory)" directoryClassif
-echo -e "You selected '$directoryClassif'\n\n"
+echo -e "You selected '$directoryClassif'"
 
-if [ -z "$directoryClassif"];
+if [ -z "$directoryClassif" ];
 then
 	directoryClassif=$PWD
 	cd $directoryClassif
@@ -68,19 +80,19 @@ fi
 # I. CREATE THE DEPENDENT VARIABLE DATASET
 # If the data used for the dependent variable should be recovered on a specific database, set database parameters
 read -p"Please enter the absolute url of the database where to find the data used to create THE DEPENDENT VARIABLE DATASET (Press enter if not concerned)" dbUrlTrueValues
-if [ -z "$dbUrlTrueValues"];
+if [ -z "$dbUrlTrueValues" ]
 then
 	dbUrlTrueValues="default"
 	dbIdTrueValues="default"
 	dbPasswordTrueValues="default"
 else
 	read -p"Please enter the ID to access the database" dbIdTrueValues
-	if [ -z "$dbIdTrueValues"];
+	if [ -z "$dbIdTrueValues" ]
 	then
 		dbIdTrueValues="default"
 	fi
 	read -p"Please enter the password corresponding to the ID you gave" dbPasswordTrueValues
-	if [ -z "$dbPasswordTrueValues"];
+	if [ -z "$dbPasswordTrueValues" ]
 	then
 		dbPasswordTrueValues="default"
 	fi
@@ -89,7 +101,7 @@ fi
 # Execute the script to calculate the independent variables
 echo -e "Groovy script is executing (calculation of the dependent variable)...\n\n\n"
 
-groovy "./createTrueValues.groovy" $configFilePathProduceTrueValues $nameFileCitiesDep $outputFolderTrueValueConfigFile $dataTrueValues $dbUrlTrueValues $dbIdTrueValues $dbPasswordTrueValues $pathToSaveTrueValues $resetDatasetTrueValue
+groovy "./createTrueValues.groovy" $currentFolder $nameFileCitiesDep $outputFolderTrueValueConfigFile $dataTrueValues $dbUrlTrueValues $dbIdTrueValues "$dbPasswordTrueValues" $pathToSaveTrueValues $resetDatasetTrueValue $indicatorUseTrueValue "$correspondenceTableTrueValue" $optionalinputFilePrefix $outputFilePathAndName "$thresholdColumnTrueValue" $var2ModelTrueValue "$columnsToKeep"
 
 echo -e "\n\n\nThe calculation of the dependent variable has been performed"
 
@@ -97,19 +109,19 @@ echo -e "\n\n\nThe calculation of the dependent variable has been performed"
 # II. CREATE THE WHOLE TRAINING DATASET
 # If the data should be recovered on a specific database, set database parameters
 read -p"Please enter the absolute url of the database where to find the data (Press enter if not concerned)" dbUrl
-if [ -z "$dbUrl"];
+if [ -z "$dbUrl" ];
 then
 	dbUrl="default"
 	dbId="default"
 	dbPassword="default"
 else
 	read -p"Please enter the ID to access the database" dbId
-	if [ -z "$dbId"];
+	if [ -z "$dbId" ];
 	then
 		dbId="default"
 	fi
 	read -p"Please enter the password corresponding to the ID you gave" dbPassword
-	if [ -z "$dbPassword"];
+	if [ -z "$dbPassword" ];
 	then
 		dbPassword="default"
 	fi
@@ -118,7 +130,7 @@ fi
 # Execute the script to calculate the independent variables
 echo -e "Groovy script is executing (calculation of the independent variables)...\n\n\n"
 
-groovy "./calculateIndependentVariables.groovy" $currentFolder $nameFileCitiesIndep $independentVarOutputFolder "OSM" $indicatorUse $dbUrl $dbId $dbPassword "$operationsToApply" $dependentVariablePath $dependentVariableColName $geometryField $sridDependentVarIndic $pathToSaveTrainingDataSet "$correspondenceTable" "$dependentVariable2ndColNameAndVal" $resetDataset $scaleTrainingDataset
+groovy "./calculateIndependentVariables.groovy" $currentFolder $nameFileCitiesIndep $independentVarOutputFolder $data $indicatorUse $dbUrl $dbId "$dbPassword" "$operationsToApply" $dependentVariablePath $dependentVariableColName $geometryField $sridDependentVarIndic $pathToSaveTrainingDataSet "$correspondenceTable" "$dependentVariable2ndColNameAndVal" $resetDataset $scaleTrainingDataset
 
 echo -e "\n\n\nThe calculation of the independent variables has been performed"
 
