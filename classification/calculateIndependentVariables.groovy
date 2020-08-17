@@ -39,17 +39,22 @@ def dependentVariableColName = this.args[10]
 def geometryField = this.args[11]
 def sridDependentVarIndic = this.args[12]
 def pathToSaveTrainingDataSet = this.args[13]
-def correspondenceTable = this.args[14].replaceAll(" ", "").split(",")
-def dependentVariable2ndColNameAndVal = this.args[15]
-Integer resetDataset = this.args[16]
-def scaleTrainingDataset = this.args[17]
-
-// Convert the list into a Map to have the key and corresponding value
+def correspondenceTable = this.args[14]
 def correspondenceValMap = [:]
-correspondenceTable.each{
-	def keyAndVal = it.split(":")
-	correspondenceValMap[keyAndVal[0]] = keyAndVal[1]
+if(correspondenceTable){
+	correspondenceTable = correspondenceTable.replaceAll(" ", "").split(",")
+	// Convert the list into a Map to have the key and corresponding value
+	correspondenceTable.each{	
+		def keyAndVal = it.split(":")
+		correspondenceValMap[keyAndVal[0]] = keyAndVal[1]
+	}
 }
+def dependentVariable2ndColNameAndVal = this.args[15]
+Integer resetDataset = this.args[16].toInteger()
+def scaleTrainingDataset = this.args[17]
+def classif = Boolean.valueOf(this.args[18])
+def optionalinputFilePrefixTrueVal = this.args[19]
+
 
 // Define some table names
 def dependentVarTableName = "dependentVarTableName"
@@ -59,10 +64,11 @@ def dependentVarTableNameRaw = "dependentVarTableName_raw"
 // Start to operate processes //////////////////////////////////////
 ////////////////////////////////////////////////////////////////////
 // Prepare and launch the workflow
-ggf.executeWorkflow(configFileWorkflowPath, pathCitiesToTreat, outputFolder, data, indicatorUse, dbUrl, dbId, dbPassword, resetDataset)
+ggf.executeWorkflow(configFileWorkflowPath, pathCitiesToTreat, outputFolder, data, indicatorUse, dbUrl, dbId, dbPassword, resetDataset, optionalinputFilePrefixTrueVal)
 
 // Open a database used for calculation and load the IAUIdF file (LCZ)
 H2GIS datasource = H2GIS.open("/tmp/classification${ggf.getUuid()};AUTO_SERVER=TRUE", "sa", "")
+
 datasource.load(dependentVariablePath, dependentVarTableNameRaw)
 
 // Set the Srid of the independent variables dataset according to the dataset origin
@@ -74,24 +80,30 @@ else if(data == "BDTOPO_V2"){
 	sridIndependentVarIndic = 2154
 }
 
+// Keep the 2nd potential value for the var2Model if filled
+def var2Model2Query = ""
+if(dependentVariable2ndColNameAndVal!="default"){
+	var2Model2Query = ", ${dependentVariable2ndColNameAndVal.split('=').first()}"
+}
+
 // Change the SRID of the input data and reduce the precision to make work the intersections
 datasource.execute """ DROP TABLE IF EXISTS $dependentVarTableName;
 			CREATE TABLE $dependentVarTableName 
-				AS SELECT ST_PRECISIONREDUCER(ST_TRANSFORM(ST_SETSRID(ST_FORCE2D($geometryField),$sridDependentVarIndic), $sridIndependentVarIndic),2) AS the_geom, $dependentVariableColName, ${dependentVariable2ndColNameAndVal.split('=').first()}
+				AS SELECT ST_PRECISIONREDUCER(ST_TRANSFORM(ST_SETSRID(ST_FORCE2D($geometryField),$sridDependentVarIndic), $sridIndependentVarIndic),2) AS the_geom, $dependentVariableColName $var2Model2Query
 				FROM $dependentVarTableNameRaw;
 			DROP TABLE IF EXISTS $dependentVarTableNameRaw"""
 datasource.getSpatialTable(dependentVarTableName).the_geom.createIndex()
 datasource.getSpatialTable(dependentVarTableName)."$dependentVariableColName".createIndex()
 
-// Gather indicators from different scales (building, block, RSU) into a single table at the scale of the training dataset
-createTrainingDataset(datasource, pathCitiesToTreat, outputFolder, data, operationsToApply, dependentVarTableName, dependentVariableColName, pathToSaveTrainingDataSet, correspondenceValMap, dependentVariable2ndColNameAndVal, resetDataset, scaleTrainingDataset)
+// For each city, gather indicators from different scales (building, block, RSU) into a single table at the scale of the training dataset
+createTrainingDataset(datasource, pathCitiesToTreat, outputFolder, data, operationsToApply, dependentVarTableName, dependentVariableColName, pathToSaveTrainingDataSet, correspondenceValMap, dependentVariable2ndColNameAndVal, resetDataset, scaleTrainingDataset, classif)
 
-// 
+// Gather the training dataset of each city into a single table
 
 // #####################################################################
 // ################### FUNCTIONS TO USE  ###############################
 // #####################################################################
-def createTrainingDataset(JdbcDataSource datasource, String pathCitiesToTreat, String outputFolder, String data, String[] operationsToApply, String dependentVarTableName, String dependentVariableColName, String pathToSaveTrainingDataSet, def correspondenceValMap, String dependentVariable2ndColNameAndVal, Integer resetDataset, String scaleTrainingDataset){
+def createTrainingDataset(JdbcDataSource datasource, String pathCitiesToTreat, String outputFolder, String data, String[] operationsToApply, String dependentVarTableName, String dependentVariableColName, String pathToSaveTrainingDataSet, def correspondenceValMap, String dependentVariable2ndColNameAndVal, Integer resetDataset, String scaleTrainingDataset, Boolean classif){
 	/**
 	* For each city, gather indicators from different scales (building, block, RSU) into a single table at RSU scale and then associate the dependent variable value for the corresponding location
 	* @param configFileWorkflowPath 	The path of the config file
@@ -107,6 +119,7 @@ def createTrainingDataset(JdbcDataSource datasource, String pathCitiesToTreat, S
 	// # The Dependent variable may have several possible values by order of priority. Create a SQL condition to keep in the training data only where the second possible typology is null (when there is only one possible value for the training)
 	
 	def condition2ndVal
+	def idName
 	if(dependentVariable2ndColNameAndVal=="default"){
 		condition2ndVal = ""
 	}
@@ -156,36 +169,40 @@ def createTrainingDataset(JdbcDataSource datasource, String pathCitiesToTreat, S
 			// Load block indicators
 			datasource.load("$areaPath/block_indicators.geojson", blockIndicTempo, true)
 
-			// Define generic name whatever be the 'scaleTrainingDataset'	
-			def finalScaleTableName
-			def scale1TableName
-			def scale2TableName
+			// Define default name if the 'scaleTrainingDataset' is 'RSU'	
+			def finalScaleTableName = "buildingFinalTableBeforeJoin"
+			def blockIndicFinalScale = blockIndicTempo
 			def idScale1ForMerge
-			// To avoid crashes of the join due to column duplicate, need to prefix some names
-			def scale1Col2Rename
-			def scale2Col2Rename
-			def listScal1Rename
-			def listScal2Rename
-			if(scaleTrainingDataset == "RSU"){
-				// Calculate average and variance at RSU scale from each indicator of the building scale
-				def inputVarAndOperationsBuild = [:]
-				def buildIndicators = datasource.getTable(buildingIndicTempo).getColumns()
-				for (col in buildIndicators){
-					if (!buildColToRemove.contains(col)){
-						inputVarAndOperationsBuild[col] = operationsToApply
-					}
+			def listblockFinalRename = []
+
+			// Calculate average and variance at RSU scale from each indicator of the building scale
+			def inputVarAndOperationsBuild = [:]
+			def buildIndicators = datasource.getTable(buildingIndicTempo).getColumns()
+			for (col in buildIndicators){
+				if (!buildColToRemove.contains(col)){
+					inputVarAndOperationsBuild[col] = operationsToApply
 				}
-				println inputVarAndOperationsBuild
-				def calcBuildStat = Geoindicators.GenericIndicators.unweightedOperationFromLowerScale()
-			    	calcBuildStat.execute([	inputLowerScaleTableName: buildingIndicTempo,
-							inputUpperScaleTableName: rsuIndicTempo,
-			       				inputIdUp: "id_rsu", inputIdLow: "id_build", 
-			       				inputVarAndOperations: inputVarAndOperationsBuild,
-			       				prefixName: "bu", datasource: datasource])
-			   	def buildIndicRsuScale = calcBuildStat.results.outputTableName
-			    
-			    
-				// Calculate building average and variance at RSU scale from each indicator of the building scale
+			}
+			def calcBuildStat = Geoindicators.GenericIndicators.unweightedOperationFromLowerScale()
+		    	calcBuildStat.execute([	inputLowerScaleTableName: buildingIndicTempo,
+						inputUpperScaleTableName: rsuIndicTempo,
+		       				inputIdUp: "id_rsu", inputIdLow: "id_build", 
+		       				inputVarAndOperations: inputVarAndOperationsBuild,
+		       				prefixName: "bu", datasource: datasource])
+		   	def buildIndicRsuScale = calcBuildStat.results.outputTableName
+
+			// To avoid crashes of the join due to column duplicate, need to prefix some names
+			def buildRsuCol2Rename = datasource.getTable(buildIndicRsuScale).getColumns()
+			def listBuildRsuRename = []
+			for (col in buildRsuCol2Rename){
+				if(col != "ID_BUILD" && col != "ID_BLOCK" && col != "ID_BLOCK" && col != "THE_GEOM"){
+					listBuildRsuRename.add("a.$col AS build_$col")
+				}
+			}
+
+			// Special processes if the scale of analysis is RSU
+			if(scaleTrainingDataset == "RSU"){
+				// Calculate building average and variance at RSU scale from each indicator of the block scale
 				def inputVarAndOperationsBlock = [:]
 				def blockIndicators = datasource.getTable(blockIndicTempo).getColumns()
 				for (col in blockIndicators){
@@ -193,126 +210,196 @@ def createTrainingDataset(JdbcDataSource datasource, String pathCitiesToTreat, S
 						inputVarAndOperationsBlock[col] = operationsToApply
 					}
 				}
+				// Calculate block indicators averaged at RSU scale
 				def calcBlockStat = Geoindicators.GenericIndicators.unweightedOperationFromLowerScale()
 			    	calcBlockStat.execute([	inputLowerScaleTableName: blockIndicTempo,
 							inputUpperScaleTableName: rsuIndicTempo,
 			       				inputIdUp: "id_rsu", inputIdLow: "id_block", 
 				       			inputVarAndOperations: inputVarAndOperationsBlock,
 				       			prefixName: "bl", datasource: datasource])
-				def blockIndicRsuScale = calcBlockStat.results.outputTableName
-
+				blockIndicFinalScale = calcBlockStat.results.outputTableName
+				
 				// To avoid crashes of the join due to column duplicate, need to prefix some names
-				scale1Col2Rename = datasource.getTable(buildIndicRsuScale).getColumns()
-				scale2Col2Rename = datasource.getTable(blockIndicRsuScale).getColumns()
-				listScal1Rename = []
-				listScal2Rename = []
-				for (col in scale1Col2Rename){
-					if(col != "id_build" || col != "id_block" || col != "id_rsu"){
-						listScal1Rename.add("a.$col AS build_$col")
+				def blockRsuCol2Rename = datasource.getTable(blockIndicFinalScale).getColumns()				
+				listblockFinalRename = []
+				for (col in blockRsuCol2Rename){
+					if(col != "ID_BLOCK" && col != "ID_RSU" && col != "THE_GEOM"){
+						listblockFinalRename.add("b.$col AS block_$col")
 					}
-				}
-				for (col in scale2Col2Rename){
-					if(col != "id_block" || col != "id_rsu"){
-						listScal2Rename.add("b.$col AS block_$col")
-					}
-				}
+				}				
 
 				// Define generic name whatever be the 'scaleTrainingDataset'	
 				finalScaleTableName = rsuIndicTempo
-				scale1TableName = buildIndicRsuScale
-				scale2TableName = blockIndicRsuScale
 				// Useful for merge between buildings and rsu tables
-				idScale1ForMerge = "id_rsu"
+				idbuildForMerge = "id_rsu"
+				idBlockForMerge = "id_block"
+				// Useful if the classif is a regression
+				idName = "id_rsu"
 			}
-			else if(scaleTrainingDataset ==  "BUILDING"){
-				// Only need to gather indicators from block and RSU scale to building scale (to avoid crashes of the join due to column duplicate, need to prefix some names)
-				scale1Col2Rename = datasource.getTable(blockIndicTempo).getColumns()
-				scale2Col2Rename = datasource.getTable(rsuIndicTempo).getColumns()
-				listScal1Rename = []
-				listScal2Rename = []
-				for (col in scale1Col2Rename){
-					if(col != "id_block" || col != "id_rsu"){
-						listScal1Rename.add("a.$col AS block_$col")
+
+			// Special processes if the scale of analysis is building
+			else if(scaleTrainingDataset ==  "BUILDING"){			
+				// Need to join RSU and building tables
+				def listRsuCol = datasource.getTable(rsuIndicTempo).getColumns()
+				listRsuRename = []
+				for (col in listRsuCol){
+					if(col != "ID_RSU" && col != "THE_GEOM"){
+						listRsuRename.add("a.$col AS rsu_$col")
 					}
 				}
-				for (col in scale2Col2Rename){
-					if(col != "id_rsu"){
-						listScal2Rename.add("b.$col AS rsu_$col")
+				def listBuildCol = datasource.getTable(buildingIndicTempo).getColumns()
+				def listBuildRename = []
+				for (col in listBuildCol){
+					if(col != "ID_RSU" && col != "ID_BLOCK" && col != "ID_BUILD" && col != "THE_GEOM"){
+						listBuildRename.add("b.$col AS build_$col")
+					}
+					else{
+						listBuildRename.add("b.$col")
 					}
 				}
-				// Define generic name whatever be the 'scaleTrainingDataset'	
-				finalScaleTableName = buildingIndicTempo
-				scale1TableName = buildIndicRsuScale
-				scale2TableName = blockIndicRsuScale
-				// Useful for merge between buildings and blocks tables
-				idScale1ForMerge = "id_block"
+				
+				// Merge scales (building and Rsu indicators)
+				datasource.getTable(rsuIndicTempo).id_rsu.createIndex()
+				datasource.getTable(buildingIndicTempo).id_rsu.createIndex()
+				datasource.execute """ DROP TABLE IF EXISTS $finalScaleTableName;
+							CREATE TABLE $finalScaleTableName 
+								AS SELECT ${listRsuRename.join(', ')}, ${listBuildRename.join(', ')} 
+								FROM $rsuIndicTempo a RIGHT JOIN $buildingIndicTempo b
+								ON a.id_rsu = b.id_rsu;"""
+
+				// To avoid crashes of the join due to column duplicate, need to prefix some names		
+				def blockCol2Rename = datasource.getTable(blockIndicTempo).getColumns()				
+				for (col in blockCol2Rename){
+					if(col != "ID_BLOCK" && col != "ID_RSU" && col != "THE_GEOM"){
+						listblockFinalRename.add("b.$col AS block_$col")
+					}
+				}
+				// Useful for merge between gathered building and rsu indicators and building indicators averaged at RSU scale
+				idbuildForMerge = "id_rsu"
+				idBlockForMerge = "id_block"
+				// Useful if the classif is a regression				
+				idName = "id_build"
 			}
 
 			// Gather all indicators (coming from three different scales) in a single table (the 'scaleTrainingDataset' scale)
 			// Note that in order to avoid crashes of the join due to column duplicate, indicators are prefixed
-			datasource.getTable(scale1TableName).id_rsu.createIndex()
+			datasource.getTable(buildIndicRsuScale).id_rsu.createIndex()
 			datasource.getTable(finalScaleTableName).id_rsu.createIndex()
 			datasource.execute """ DROP TABLE IF EXISTS $scale1ScaleFin;
 						CREATE TABLE $scale1ScaleFin 
-							AS SELECT ${listScal1Rename.join(', ')}, b.*
-							FROM $scale1TableName a RIGHT JOIN $finalScaleTableName b
-							ON a.$idScale1ForMerge = b.$idScale1ForMerge;"""
-			datasource.getTable(scale2TableName).id_rsu.createIndex()
+							AS SELECT ${listBuildRsuRename.join(', ')}, b.*
+							FROM $buildIndicRsuScale a RIGHT JOIN $finalScaleTableName b
+							ON a.$idbuildForMerge = b.$idbuildForMerge;"""
+			datasource.getTable(blockIndicFinalScale).id_rsu.createIndex()
 			datasource.getTable(scale1ScaleFin).id_rsu.createIndex()
 			datasource.execute """ DROP TABLE IF EXISTS $allFinalScaleIndic;
 						CREATE TABLE $allFinalScaleIndic 
-							AS SELECT a.*, ${listScal2Rename.join(', ')}
-							FROM $scale1ScaleFin a LEFT JOIN $scale2TableName b
-							ON a.id_rsu = b.id_rsu;"""
-			
-			// Calculate the intersection between the training dataset and the indicator at the same scale and then create a distribution table
-			datasource.getSpatialTable(allFinalScaleIndic).the_geom.createIndex()
-			def areaCalcQuery = "ST_AREA(ST_INTERSECTION(a.the_geom,b.the_geom))"
-			def casewhenQuery = ""
-			def sumQuery = ""
-			correspondenceValMap.each{ind, val ->
-				casewhenQuery+="CASE WHEN a.$dependentVariableColName='${ind}' THEN ${areaCalcQuery} ELSE 0 END AS $prefixDependentVar${val}, "
-				sumQuery += "SUM($prefixDependentVar${val}) AS $prefixDependentVar${val}, "
+							AS SELECT a.*, ${listblockFinalRename.join(', ')}
+							FROM $scale1ScaleFin a LEFT JOIN $blockIndicFinalScale b
+							ON a.$idBlockForMerge = b.$idBlockForMerge;"""
+
+			// If the randomForest is a classification, calculate the intersection between the training dataset and the indicator at the same scale and then create a distribution table
+			if(classif){
+				datasource.getSpatialTable(allFinalScaleIndic).the_geom.createIndex()
+				def areaCalcQuery = "ST_AREA(ST_INTERSECTION(a.the_geom,b.the_geom))"
+				def casewhenQuery = ""
+				def sumQuery = ""
+				def ifVarchar = ""
+				// Initial 'var2Model' values may be INTEGER or VARCHAR, thus need to add 'in the queries if VARCHAR
+				if(datasource."$dependentVarTableName"."$dependentVariableColName".getType() == "VARCHAR"){
+					ifVarchar = "'"
+				}
+				correspondenceValMap.each{ind, val ->
+					casewhenQuery+="CASE WHEN a.$dependentVariableColName=$ifVarchar${ind}$ifVarchar THEN ${areaCalcQuery} ELSE 0 END AS $prefixDependentVar${val}, "
+					sumQuery += "SUM($prefixDependentVar${val}) AS $prefixDependentVar${val}, "
+				}
+				datasource.execute	"""DROP TABLE IF EXISTS $distributionTableBuff;
+							CREATE TABLE $distributionTableBuff
+									AS SELECT b.id_rsu, ${casewhenQuery[0..-3]}
+									FROM $dependentVarTableName a, $allFinalScaleIndic b 
+									WHERE $condition2ndVal a.the_geom && b.the_geom AND ST_INTERSECTS(a.the_geom, b.the_geom)"""
+
+				datasource.getTable(distributionTableBuff).id_rsu.createIndex()
+
+				datasource.execute """
+									DROP TABLE IF EXISTS $distributionTable, distribution_repartition;
+									CREATE TABLE $distributionTable
+											AS SELECT id_rsu, ${sumQuery[0..-3]}
+											FROM $distributionTableBuff
+											GROUP BY id_rsu;"""
+
+				// The main typology and indicators characterizing the distribution are calculated
+				def computeDistribChar = Geoindicators.GenericIndicators.distributionCharacterization()
+				computeDistribChar.execute([distribTableName:   distributionTable,
+							    inputId:            "id_rsu",
+							    distribIndicator:   ["uniqueness"],
+							    extremum:           "GREATEST",
+							    prefixName:         "",
+							    datasource:         datasource])
+				def resultsDistrib = computeDistribChar.getResults().outputTableName
+
+				// We merge the more appropriate LCZ value to the indicators calculated using OSM data 
+				// Note that we conserve the uniqueness value to be able to select only the most unique value in the training stage
+				datasource.getTable(resultsDistrib).id_rsu.createIndex()
+				datasource.getTable(allFinalScaleIndic).id_rsu.createIndex()
+				datasource.execute """ DROP TABLE IF EXISTS $trainingData;
+										CREATE TABLE $trainingData
+												AS SELECT a.EXTREMUM_COL AS $dependentVariableColName, a.UNIQUENESS_VALUE, b.*
+												FROM $resultsDistrib a 
+													RIGHT JOIN $allFinalScaleIndic b
+													ON a.id_rsu = b.id_rsu;
+												"""
 			}
-			datasource.execute	"""DROP TABLE IF EXISTS $distributionTableBuff;
-						CREATE TABLE $distributionTableBuff
-								AS SELECT b.id_rsu, ${casewhenQuery[0..-3]}
-								FROM $dependentVarTableName a, $allFinalScaleIndic b 
-								WHERE $condition2ndVal a.the_geom && b.the_geom AND ST_INTERSECTS(a.the_geom, b.the_geom)"""
+			// If the randomForest is a regression, calculate a weighted average of the 'var2Model'
+			else{
+				// To avoid duplicate id name (id_build and id_build or id_rsu and id_rsu), need to rename the id from the targeted table
+				datasource.execute """ ALTER TABLE $allFinalScaleIndic RENAME COLUMN $idName TO id_target"""
 
-			datasource.getTable(distributionTableBuff).id_rsu.createIndex()
+				// Create an id names 'idName' if not exists in the dependent table
+				if(!datasource.getTable(dependentVarTableName).getColumns().contains(idName.toUpperCase())){
+					datasource.execute """ ALTER TABLE $dependentVarTableName ADD COLUMN $idName INTEGER AUTO_INCREMENT;"""
+				}
+				
+				// Create a spatial join between source and target tables	        
+				def computeSpatialJoin =  Geoindicators.SpatialUnits.spatialJoin()
+				computeSpatialJoin.execute([
+							sourceTable     : dependentVarTableName,
+							targetTable     : allFinalScaleIndic,
+							idColumnTarget  : "id_target",
+							pointOnSurface  : false,
+							nbRelations     : null,
+							prefixName      : "",
+							datasource      : datasource])
+				def spatialJoined = computeSpatialJoin.results.outputTableName
 
-			datasource.execute """
-								DROP TABLE IF EXISTS $distributionTable, distribution_repartition;
-								CREATE TABLE $distributionTable
-										AS SELECT id_rsu, ${sumQuery[0..-3]}
-										FROM $distributionTableBuff
-										GROUP BY id_rsu;"""
+				datasource.execute """ ALTER TABLE $spatialJoined DROP COLUMN THE_GEOM"""
 
-			// The main typology and indicators characterizing the distribution are calculated
-			def computeDistribChar = Geoindicators.GenericIndicators.distributionCharacterization()
-			computeDistribChar.execute([distribTableName:   distributionTable,
-						    inputId:            "id_rsu",
-						    distribIndicator:   ["uniqueness"],
-						    extremum:           "GREATEST",
-						    prefixName:         "",
-						    datasource:         datasource])
-			def resultsDistrib = computeDistribChar.getResults().outputTableName
+				// Calculate the area weighted value of the var2Model in the target scale (the mode would be too much complicated with continuous values) AND also an indicator of uniqueness of the intersection between buildings (what proportion of building in the target table is covered by the most intersected building in the source table ?)
+				datasource.getTable(spatialJoined).id_target.createIndex()
+				datasource.execute """ 	DROP TABLE IF EXISTS weighted_average;
+							CREATE TABLE weighted_average
+								AS SELECT 	id_target, 
+										SUM(AREA*$dependentVariableColName)/SUM(AREA) AS $dependentVariableColName,
+										MAX(AREA)/SUM(AREA) AS UNIQUENESS_VALUE
+								FROM $spatialJoined
+								GROUP BY id_target;"""
 
-			// We merge the more appropriate LCZ value to the indicators calculated using OSM data 
-			// Note that we conserve the uniqueness value to be able to select only the most unique value in the training stage
-			datasource.getTable(resultsDistrib).id_rsu.createIndex()
-			datasource.getTable(allFinalScaleIndic).id_rsu.createIndex()
-			datasource.execute """ DROP TABLE IF EXISTS $trainingData;
-									CREATE TABLE $trainingData
-											AS SELECT a.EXTREMUM_COL AS $dependentVariableColName, a.UNIQUENESS_VALUE, b.*
-											FROM $resultsDistrib a 
-												RIGHT JOIN $allFinalScaleIndic b
-												ON a.id_rsu = b.id_rsu;
-											"""
+				// Create the training data (gathering dependent (area weighted) and independent variables)
+			        def computeJoinFinal = Geoindicators.DataUtils.joinTables()
+				computeJoinFinal.execute([
+						inputTableNamesWithId   : ["weighted_average":"id_target", (allFinalScaleIndic):"id_target"],
+						outputTableName         : trainingData,
+						datasource              : datasource])
+				def finalJoined = computeJoinFinal.results.outputTableName	
+
+				// Reinitialize the name of the initial id (id_build) instead of id_target
+				datasource.execute """ ALTER TABLE $finalJoined RENAME COLUMN id_target TO $idName"""
+			}
 
 			// Save both the file in a geojson format for spatial investigation and in csv to manipulate easily with the Pandas library of Python
+			println "will save $outputFilePath"
 			datasource.save(trainingData, "${outputFilePath}.geojson")
+			println "saved"
 			datasource.execute """ ALTER TABLE $trainingData DROP COLUMN the_geom;"""
 			datasource.getTable(trainingData).reload()
 			datasource.save(trainingData, "${outputFilePath}.csv")

@@ -11,7 +11,7 @@ nameFileCitiesDep="allCitiesBDTOPO_V2.csv"
 
 # II. Path for the independent variables and the training dataset
 independentVarOutputFolder="/home/decide/Data/URBIO/Donnees_brutes/LCZ/TrainingDataSets/Indicators/"
-pathToSaveTrainingDataSet="/home/decide/Data/URBIO/Donnees_brutes/LCZ/TrainingDataSets/TrainingDataset/BDTOPO_V2/"
+pathToSaveTrainingDataSet="/home/decide/Data/URBIO/Donnees_brutes/BuildingHeight/BDTOPO_V2/DatasetByCity/"
 # File where are stored the list of cities to process for the independent variable dataset (note that the cities to be processed should be String - even for insee codes - separated by comma and the file should be located in the same folder as the current file)
 nameFileCitiesIndep="allCitiesOSM.csv"
 
@@ -22,25 +22,25 @@ nameFileCitiesIndep="allCitiesOSM.csv"
 dataTrueValues="BDTOPO_V2"
 # If 'resetDatasetTrueValue'=0, do not re-calculate the dependent variable for cities having already results stored in the 'outputFolderTrueValueConfigFile' folder
 resetDatasetTrueValue=0
-indicatorUseTrueValue="LCZ"
+indicatorUseTrueValue="HEIGHT_ROOF"
 # If you want to modify the initial TrueValue to an other system, fill in the correspondence table (if not leave "")
 correspondenceTableTrueValue=""
 # String to add at the end of the inputDirectory to get the right file (for example "/rsu_lcz.geojson" for the LCZ of BDTOPO_V2)
-optionalinputFilePrefixTrueVal="/rsu_lcz.geojson"
+optionalinputFilePrefixTrueVal="/building.geojson"
 # Where to save the dataset that will be used as true values for the training
-outputFilePathAndName="/home/decide/Data/URBIO/Donnees_brutes/LCZ/BDTOPO_V2/IDF_LCZ_dataset20200806.geojson"
+outputFilePathAndName="/home/decide/Data/URBIO/Donnees_brutes/BuildingHeight/BDTOPO_V2/TrueValues/IDF_BuildingHeight_dataset20200807.geojson"
 # Map containing as key a field name and as value a threshold value below which data will be removed
 thresholdColumnTrueValue=""
 # The name of the variable to model
-var2ModelTrueValue="LCZ1"
+var2ModelTrueValue="HEIGHT_ROOF"
 # List of columns to keep (except the 'varToModel' which is automatically added)
-columnsToKeep="THE_GEOM,LCZ2"
+columnsToKeep="THE_GEOM"
 
 # II. TO CREATE THE WHOLE TRAINING DATASET
 # Scale of the dataset used to train the model (possible values: "BUILDING" or "RSU")
-scaleTrainingDataset="RSU"
+scaleTrainingDataset="BUILDING"
 # If the randomForest is a classification (classif="true") or a regression (classif="false")
-classif="true"
+classif="false"
 # If 'scaleTrainingDataset="RSU"', operations to apply to go gather indicators to a unique scale (see the documentation concerning the IProcess unweightedOperationFromLowerScale() to know which parameters are accepted)
 operationsToApply="AVG, STD"
 # If 'resetDataset'=0, do not re-calculate the indicators for cities having already results stored in the 'pathToSaveTrainingDataSet' folder
@@ -50,13 +50,13 @@ indicatorUse="URBAN_TYPOLOGY"
 # Dataset to use ("OSM" or "BDTOPO_V2")
 data="OSM"
 # Name of the dependent variable in the table
-dependentVariableColName="LCZ1"
+dependentVariableColName="HEIGHT_ROOF"
 # Name of geometric field in the table where is stored the dependent variables
 geometryField="THE_GEOM"
 # Srid of the dependent variable dataset
 sridDependentVarIndic="2154"
-# Table of correspondence between the values from the dependent variable table and values that should be used in the future (put the same value if you want them to be the same). Note that all values will be necessarily converted to string since they will be used as column values in the code
-correspondenceTable="1: 1,2: 2,3: 3,4: 4,5: 5,6: 6,7: 7,8: 8,9: 9,10: 10,101: 101,102: 102,103: 103,104: 104,105: 105,106: 106,107: 107"
+# Table of correspondence between the values from the dependent variable table and values that should be used in the future (put the same value if you want them to be the same). Note that all values will be necessarily converted to string since they will be used as column values in the code ("VAL" + value)
+correspondenceTable=""
 # The Dependent variable may have several possible values by order of priority. If you want to focus the training only for smaples having one value, you may give the name of the variable storing the second possible value and the SQL value where it has no value... Note that if there is no second value to use, 'dependentVariable2ndColNameAndVal' should be equal to "default" 
 dependentVariable2ndColNameAndVal="default"
 # String to add at the end of the inputDirectory to get the right file (for example "/osm_building.geojson" for the LCZ of OSM)
@@ -106,6 +106,7 @@ fi
 
 # Execute the script to calculate the independent variables
 echo -e "Groovy script is executing (calculation of the dependent variable)...\n\n\n"
+
 
 groovy "./createTrueValues.groovy" "$currentFolder" "$nameFileCitiesDep" "$outputFolderTrueValueConfigFile" "$dataTrueValues" "$dbUrlTrueValues" "$dbIdTrueValues" "$dbPasswordTrueValues" "$pathToSaveTrueValues" "$resetDatasetTrueValue" "$indicatorUseTrueValue" "$correspondenceTableTrueValue"  "$optionalinputFilePrefixTrueVal" "$outputFilePathAndName" "$thresholdColumnTrueValue" "$var2ModelTrueValue" "$columnsToKeep"
 

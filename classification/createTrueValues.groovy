@@ -33,7 +33,7 @@ def dbUrlTrueValues = this.args[4]
 def dbIdTrueValues = this.args[5]
 def dbPasswordTrueValues = this.args[6]
 def pathToSaveTrueValues = this.args[7]
-Integer resetDatasetTrueValue = this.args[8]
+Integer resetDatasetTrueValue = this.args[8].toInteger()
 def indicatorUseTrueValue = this.args[9].replaceAll(" ", "").split(",")
 def correspondenceValMap = [:]
 if(this.args[10]){
@@ -54,6 +54,7 @@ def var2Model = this.args[14]
 def columnsToKeep = this.args[15].replaceAll(" ", "").split(",")
 
 
+
 // Define some table names
 def dependentVarTableName = "dependentVarTableName"
 def dependentVarTableNameRaw = "dependentVarTableName_raw"
@@ -61,9 +62,15 @@ def dependentVarTableNameRaw = "dependentVarTableName_raw"
 ////////////////////////////////////////////////////////////////////
 // Start to operate processes //////////////////////////////////////
 ////////////////////////////////////////////////////////////////////
-// Prepare and launch the workflow
-ggf.executeWorkflow(configFilePathProduceTrueValues, pathCitiesToTreat, outputFolderTrueValueConfigFile, dataTrueValues, indicatorUseTrueValue, dbUrlTrueValues, dbIdTrueValues, dbPasswordTrueValues, resetDatasetTrueValue)
+File outputSaveTrueValueFile = new File(outputFilePathAndName)
+if(!outputSaveTrueValueFile.exists() || resetDatasetTrueValue){
+	// Prepare and launch the workflow
+	ggf.executeWorkflow(configFilePathProduceTrueValues, pathCitiesToTreat, outputFolderTrueValueConfigFile, dataTrueValues, indicatorUseTrueValue, dbUrlTrueValues, dbIdTrueValues, dbPasswordTrueValues, resetDatasetTrueValue, optionalinputFilePrefix)
 
-// Gather all cities in a same file to create the TrueValue dataset
-ggf.unionCities(outputFolderTrueValueConfigFile, optionalinputFilePrefix, outputFilePathAndName, dataTrueValues, thresholdColumn, var2Model, columnsToKeep, correspondenceValMap)
+	// Gather all cities in a same file to create the TrueValue dataset
+	ggf.unionCities(outputFolderTrueValueConfigFile, optionalinputFilePrefix, outputFilePathAndName, dataTrueValues, thresholdColumn, var2Model, columnsToKeep, correspondenceValMap)
+}
+else{
+	println "The file where are saved true value already exists and you set 'resetDatasetTrueValue' to 0, thus no recalculation is performed"
+}
 

@@ -14,7 +14,7 @@ import org.orbisgis.orbisdata.datamanager.jdbc.*
 import groovy.json.JsonOutput
 
 class groovy_generic_function{
-	def executeWorkflow(String configFileWorkflowPath, String pathCitiesToTreat, String outputFolder, String data, String[] indicatorUse, String dbUrl, String dbId, String dbPassword, Integer resetDataset){
+	def executeWorkflow(String configFileWorkflowPath, String pathCitiesToTreat, String outputFolder, String data, String[] indicatorUse, String dbUrl, String dbId, String dbPassword, Integer resetDataset, String optionalinputFilePrefix){
 		/**
 		* Prepare and launch the Workflow (OSM or BDTOPO_V2) configuration file
 		* @param configFileWorkflowPath 	The path of the config file
@@ -57,12 +57,14 @@ class groovy_generic_function{
 		def resultsGeoclimate=outputFolder
 		File[] citiesAlreadyDone = new File(resultsGeoclimate).listFiles()
 
-		// If 'resetDataset', remove cities already done from the list to be done
+		// If 'resetDataset'=0, remove cities already done from the list to be done
 		def listToBeDone = allCities
-		if(resetDataset != 0){
+		if(resetDataset == 0){
 			for (pathCity in citiesAlreadyDone){
 				def city = pathCity.toString().split("/").last()[data.size()+1..-1]
-				listToBeDone-=city
+				if((new File(pathCity.path+optionalinputFilePrefix)).exists()){
+					listToBeDone-=city
+				}
 			}
 		}
 
@@ -325,7 +327,9 @@ class groovy_generic_function{
 			queryModifyValues = """ ALTER TABLE ALL_CITIES RENAME TO ALL_CITIES_INT;"""
 		}
 
-		datasource.execute """ CALL GEOJSONWRITE('$outputFilePathAndName}.gz', 'ALL_CITIES_INT')"""
+		datasource.execute queryModifyValues
+
+		datasource.execute """ CALL GEOJSONWRITE('${outputFilePathAndName}', 'ALL_CITIES_INT')"""
 	}
 }
 
