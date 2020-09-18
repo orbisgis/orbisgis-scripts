@@ -15,102 +15,194 @@ import pandas as pd
 import numpy as np
 import matplotlib.pylab as plt
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestRegressor
 from sklearn import tree
 from sklearn import metrics
 import glob
 import graphviz
 import pydot
 from joblib import dump
+import sys
+import os
 
 #Local functions
 import python_model_optimization as pmo
 
+# ===========================================================
+# RECOVER COMMAND LINE ARGUMENTS (PASSED BY THE BATCH)
+name_object=sys.argv[1]
+if name_object=="RSU":
+    index_col = "ID_RSU"
+if name_object=="BUILDING":
+    index_col = "ID_BUILD"    
+typoCol=sys.argv[2]
+pathData=sys.argv[3]
+dataset=sys.argv[4]
+fileNpath_defaultval_transfo = "/".join(sys.argv[5].split("/")[0:-1]) + os.sep + "indicator_default_values.csv"
+pathResults=sys.argv[6]
+classif=sys.argv[7]
+
+"""
+name_object = "BUILDING"
+if name_object=="RSU":
+    index_col = "ID_RSU"
+
+if name_object=="BUILDING":
+    index_col = "ID_BUILD"  
+
+typoCol="HEIGHT_ROOF"
+pathData="/home/decide/Data/URBIO/Donnees_brutes/BuildingHeight/BDTOPO_V2/Test/"
+dataset="OSM"
+fileNpath_defaultval_transfo="/home/decide/Code/orbisgis-scripts/classification/buildingHeight_BDTopo_v2_OSM/indicator_default_values.csv"
+pathResults="/home/decide/Data/URBIO/Donnees_brutes/BuildingHeight/BDTOPO_V2/ResultsSensitivityAnalysis/"
+classif="false"
+"""
+
 # ==========================================================
 #PARAMETERS TO SET
-index_col = "ID_RSU"
-name_object = "RSU"
-typoCol = "LCZ"
+# Minimum number of objects in the smallest class (for equaliness)
+nb_min_class = 2000
+# Minimum ratio of building used for verification
+nb_min_bu_verif = 0.3
 uniqueness_val = u"UNIQUENESS_VALUE"
 
 # Default distance to road and building
 default_dist_road = 100
 default_dist_build = 100
 
-# Columns to remove
-cols2remove =   ["ID_RSU", "BUILD_AVG_HEIGHT_WALL","BUILD_AVG_VOLUME",
-                 "BUILD_AVG_NUMBER_BUILDING_NEIGHBOR",
+# Columns that need to be converted from string to categorical data
+colToConvert = ["BUILD_TYPE", "BUILD_MAIN_USE"]
+
+# Columns to remove because kind of "duplicated" or not necessary
+cols2remove =   pd.Index(["ID_RSU", "ID_BUILD", "BUILD_AVG_HEIGHT_WALL","BUILD_STD_HEIGHT_WALL",
+                 "BUILD_AVG_VOLUME", "BUILD_AVG_NUMBER_BUILDING_NEIGHBOR",
                 "BUILD_AVG_MINIMUM_BUILDING_SPACING","BUILD_ID_RSU",
-                "BLOCK_AVG_AVG_HEIGHT_ROOF_AREA_WEIGHTED","BLOCK_AVG_STD_HEIGHT_ROOF_AREA_WEIGHTED",
-                "BLOCK_ID_RSU", "MAIN_BUILDING_DIRECTION"]
-"""cols2remove =   ["BUILD_AVG_HEIGHT_WALL","BUILD_STD_HEIGHT_WALL",
-                "BUILD_AVG_VOLUME","BUILD_AVG_NUMBER_BUILDING_NEIGHBOR",
-                "BUILD_AVG_MINIMUM_BUILDING_SPACING","BUILD_ID_RSU",
-                "BLOCK_AVG_AVG_HEIGHT_ROOF_AREA_WEIGHTED","BLOCK_AVG_STD_HEIGHT_ROOF_AREA_WEIGHTED",
-                "BLOCK_ID_RSU", "MAIN_BUILDING_DIRECTION"]"""
+                "RSU_MAIN_BUILDING_DIRECTION", "BLOCK_MAIN_BUILDING_DIRECTION",
+                "BUILD_ID_ZONE","RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H0_10_D0_30",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H0_10_D120_150",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H0_10_D150_180",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H0_10_D30_60",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H0_10_D60_90",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H0_10_D90_120",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H10_20_D0_30",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H10_20_D120_150",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H10_20_D150_180",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H10_20_D30_60",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H10_20_D60_90",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H10_20_D90_120",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H20_30_D0_30",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H20_30_D120_150",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H20_30_D150_180",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H20_30_D30_60",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H20_30_D60_90",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H20_30_D90_120",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H30_40_D0_30",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H30_40_D120_150",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H30_40_D150_180",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H30_40_D30_60",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H30_40_D60_90",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H30_40_D90_120",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H40_50_D0_30",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H40_50_D120_150",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H40_50_D150_180",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H40_50_D30_60",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H40_50_D60_90",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H40_50_D90_120",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H50_D0_30",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H50_D120_150",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H50_D150_180",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H50_D30_60",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H50_D60_90",
+                "RSU_PROJECTED_FACADE_AREA_DISTRIBUTION_H50_D90_120",
+                "BLOCK_AVG_AVG_HEIGHT_ROOF_AREA_WEIGHTED",
+                "BLOCK_AVG_STD_HEIGHT_ROOF_AREA_WEIGHTED",
+                "BLOCK_STD_AVG_HEIGHT_ROOF_AREA_WEIGHTED","BLOCK_STD_STD_HEIGHT_ROOF_AREA_WEIGHTED"])
+# Columns to remove because based on a non accurate building height
+cols2removeHeight = pd.Index(["ASPECT_RATIO","AVG_HEIGHT_ROOF_AREA_WEIGHTED",
+                              "AVG_VOLUME", 
+                              "BUILD_AVG_HEIGHT_ROOF","BUILD_STD_HEIGHT_ROOF",
+                                "BUILD_STD_VOLUME","BUILD_AVG_FLOOR_AREA",
+                                "BUILD_STD_FLOOR_AREA","BUILD_AVG_CONTIGUITY",
+                                "BUILD_STD_CONTIGUITY","BUILD_AVG_RAW_COMPACTNESS",
+                                "BUILD_STD_RAW_COMPACTNESS", "RSU_AVG_HEIGHT_ROOF_AREA_WEIGHTED",
+                                "RSU_STD_HEIGHT_ROOF_AREA_WEIGHTED", "RSU_FREE_EXTERNAL_FACADE_DENSITY",
+                                "RSU_BUILDING_VOLUME_DENSITY", "RSU_AVG_VOLUME", 
+                                "RSU_GEOM_AVG_HEIGHT_ROOF", "RSU_BUILDING_FLOOR_AREA_DENSITY",
+                                "RSU_ASPECT_RATIO", "BUILD_HEIGHT_WALL", "BUILD_HEIGHT_ROOF",
+                                "BUILD_NB_LEV", "BUILD_VOLUME", "BUILD_FLOOR_AREA",
+                                "BUILD_CONTIGUITY", "BUILD_RAW_COMPACTNESS","BLOCK_FLOOR_AREA",
+                                "BLOCK_VOLUME",
+                                "BLOCK_NET_COMPACTNESS", "BLOCK_AVG_HEIGHT_ROOF_AREA_WEIGHTED",
+                                "BLOCK_STD_HEIGHT_ROOF_AREA_WEIGHTED",
+                                "BLOCK_AVG_FLOOR_AREA", "BLOCK_AVG_NET_COMPACTNESS",
+                                "BLOCK_AVG_VOLUME", "BLOCK_FLOOR_AREA",
+                                "BLOCK_FLOOR_AREA","BLOCK_NET_COMPACTNESS",
+                                "BLOCK_STD_FLOOR_AREA","BLOCK_STD_HEIGHT_ROOF_AREA_WEIGHTED",
+                                "BLOCK_STD_NET_COMPACTNESS",
+                                "BLOCK_STD_VOLUME","BLOCK_VOLUME","BUILD_AVG_COMMON_WALL_FRACTION",
+                                "BUILD_AVG_CONTIGUITY","BUILD_AVG_FLOOR_AREA","BUILD_AVG_HEIGHT_ROOF",
+                                "BUILD_AVG_HEIGHT_WALL","BUILD_AVG_RAW_COMPACTNESS","BUILD_AVG_VOLUME",
+                                "BUILD_CONTIGUITY","BUILD_FLOOR_AREA","BUILD_HEIGHT_ROOF",
+                                "BUILD_HEIGHT_WALL","BUILD_NB_LEV","BUILD_RAW_COMPACTNESS",
+                                "BUILD_STD_CONTIGUITY","BUILD_STD_FLOOR_AREA","BUILD_STD_HEIGHT_ROOF",
+                                "BUILD_STD_HEIGHT_WALL","BUILD_STD_RAW_COMPACTNESS","BUILD_STD_VOLUME",
+                                "BUILD_VOLUME","BUILDING_FLOOR_AREA_DENSITY","BUILDING_VOLUME_DENSITY",
+                                "FREE_EXTERNAL_FACADE_DENSITY","GEOM_AVG_HEIGHT_ROOF","RSU_ASPECT_RATIO",
+                                "RSU_AVG_HEIGHT_ROOF_AREA_WEIGHTED","RSU_AVG_VOLUME",
+                                "RSU_BUILDING_FLOOR_AREA_DENSITY","RSU_BUILDING_VOLUME_DENSITY",
+                                "RSU_EFFECTIVE_TERRAIN_ROUGHNESS_CLASS","RSU_EFFECTIVE_TERRAIN_ROUGHNESS_LENGTH",
+                                "RSU_FREE_EXTERNAL_FACADE_DENSITY","RSU_GEOM_AVG_HEIGHT_ROOF",
+                                "RSU_GROUND_SKY_VIEW_FACTOR","RSU_STD_HEIGHT_ROOF_AREA_WEIGHTED",
+                                "STD_HEIGHT_ROOF_AREA_WEIGHTED"])
+# Remove the indicators based on the height if the dataset used is OSM
+if dataset=="OSM":
+    cols2remove=cols2remove.union(cols2removeHeight)
+if name_object=="BUILDING":
+    cols2remove=cols2remove.union(["BUILD_ID_SOURCE", "BUILD_ZINDEX", "ID_BLOCK", "ID_RSU"])
+elif name_object=="RSU":
+    cols2remove+=[]
 colNotIndic = [typoCol, uniqueness_val]
-
-
-
-# Paths and files
-pathData = "/home/decide/Data/URBIO/Donnees_brutes/LCZ/TrainingDataSets/"
-fileNpath_data = pathData+"TrainingDataset/osm_Saint-Denis.csv"
-#fileNpath_data = pathData+"iauidfTrainingDataSetTest.csv"
-fileNpath_datatransformed = pathData+"iauidfTrainingDataSetTest_transfo.csv"
-fileNpath_defaultval_transfo = pathData+"indicator_default_values.csv"
-pathResults = "/home/decide/Data/URBIO/Donnees_brutes/LCZ/TrainingDataSets/AlgorithmOptimization/"
-
-# Minimum number of classified objects (within the entire dataset)
-nb_min_default = 60000
-# Minimum number of objects in the smallest class (for equaliness)
-nb_min_class = 2000
-# Minimum ratio of building used for verification
-nb_min_bu_verif = 0.3
 
 
 # ==========================================================
 #DATA IS LOADED AND UNUSED COLUMNS REMOVED
 #Data used for the classification
 df_raw = pd.concat([pd.read_csv(f, header = 0, index_col = False)
-                    for f in glob.glob(pathData+"TrainingDataset/*.csv")], 
+                    for f in glob.glob(pathData+"*.csv")], 
                     ignore_index = True)
 
 # Remove uneeded columns and remove RSU having no LCZ defined
 # (because they do not intersects any IAUIDF rsu that have only one LCZ value)
-df = df_raw.drop(cols2remove, axis = 1).dropna(subset = [typoCol])
+df = df_raw.drop(cols2remove.intersection(df_raw.columns), axis = 1).dropna(subset = [typoCol])
+
+# Convert the needed variables into categorical data
+for var in colToConvert:
+    df[var] = df[var].factorize()[0]
 
 #Name of the functions to apply for data distribution transformation are loaded
 transfo2apply = pd.read_csv(fileNpath_defaultval_transfo, index_col = 0, \
                             header = 0)["transfo"].reindex(df.columns).dropna()
 
 # Set default values for indicators having NaN
-df_default_val = pd.read_csv(fileNpath_defaultval_transfo, index_col = 0, header = 0)["default_val"]
-df_default_val.loc["AVG_MINIMUM_BUILDING_SPACING"]=default_dist_build
-df_default_val.loc["BUILD_AVG_MINIMUM_BUILDING_SPACING"]=default_dist_build
-df_default_val.loc["BUILD_AVG_ROAD_DISTANCE"]=default_dist_road
-df.fillna(df_default_val, axis = 0, inplace=True)
+df_default_val = pd.read_csv(fileNpath_defaultval_transfo, index_col = 0, header = 0)
+df_default_val.loc["AVG_MINIMUM_BUILDING_SPACING", "default_val"]=default_dist_build
+df_default_val.loc["BUILD_AVG_MINIMUM_BUILDING_SPACING", "default_val"]=default_dist_build
+df_default_val.loc["BUILD_AVG_ROAD_DISTANCE", "default_val"]=default_dist_road
+df_default_val.loc["BUILD_MINIMUM_BUILDING_SPACING", "default_val"]=default_dist_build
+df_default_val.loc["BUILD_ROAD_DISTANCE", "default_val"]=default_dist_road
+df_default_val.loc["RSU_AVG_MINIMUM_BUILDING_SPACING", "default_val"]=default_dist_build
 
-"""
-# Plot the histogram of each indicator by batch of 'nb_indic_per_fig' indicators
-nb_indic_per_fig = 12
-bin_nb = 20
-nb_fig = df.columns.size/nb_indic_per_fig
-if df.columns.size%nb_indic_per_fig != 0:
-    nb_fig += 1
-for i in range(0,nb_fig):
-    df2hist = df.loc[:, df.columns[i*nb_indic_per_fig:(i+1)*nb_indic_per_fig]]
-    fig, ax = plt.subplots()
-    df2hist.hist(bins = bin_nb, ax = ax)
+if df.drop(colNotIndic, axis = 1).columns.difference(df_default_val.index).empty:
+    df.fillna(df_default_val["default_val"], axis = 0, inplace=True)
+else:
+    print "You should define a default value for the following columns of your input data: {0}".format(df.drop(colNotIndic, axis = 1).columns.difference(df_default_val.index))
+    list_df = pd.Series(df.drop(colNotIndic, axis = 1).columns.difference(df_default_val.index))
+    list_df.to_csv("/home/decide/Bureau/list_indic.csv")
 
-# Test the transformations (transformation to a more "uniform distribution")
-df_test_transfo = pmo.AnalyseData.transfo2normal(df.drop(colNotIndic, axis = 1), transfo2apply)
-for i in range(0,nb_fig):
-    df2hist = df_test_transfo.loc[:, df_test_transfo.columns[i*nb_indic_per_fig:(i+1)*nb_indic_per_fig]]
-    fig, ax = plt.subplots()
-    df2hist.hist(bins = bin_nb, ax = ax)
-"""
+# Minimum number of classified objects (within the entire dataset)
+nb_min_default = df.index.size*0.05
 
-# ==========================================================
-#CLASSIFICATION TESTS
+# DEFINED SENSITIVITY ANALYSIS
 #Constants
 initial_indic = df.drop(colNotIndic, axis = 1).columns
 nb_class = len(sorted(set(df[typoCol])))
@@ -140,31 +232,6 @@ scenari["distrib_class"]["nb_min"] = nb_min_class * nb_class
 #3.3 in the report
 scenari["uniqueness"] = scenari["default"].copy()
 scenari["uniqueness"]["threshold_uniqueness"] = [0.3, 0.5, 0.7, 1.0]
-#3.4 in the report
-scenari["indics"] = scenari["default"].copy()
-scenari["indics"]["indic2use"] = {"few_indicators" : initial_indic.drop(["BUILD_AVG_HEIGHT_ROOF",\
-       "BUILD_STD_HEIGHT_ROOF", "BUILD_AVG_FLOOR_AREA", "BUILD_STD_FLOOR_AREA",
-       "BUILD_AVG_CONTIGUITY",  "BUILD_STD_CONTIGUITY",
-       "BUILD_AVG_RAW_COMPACTNESS", "BUILD_STD_RAW_COMPACTNESS", 
-       "AVG_HEIGHT_ROOF_AREA_WEIGHTED", "STD_HEIGHT_ROOF_AREA_WEIGHTED", \
-       "FREE_EXTERNAL_FACADE_DENSITY", "BUILDING_VOLUME_DENSITY",
-       "AVG_VOLUME", "GEOM_AVG_HEIGHT_ROOF",
-       "BUILDING_FLOOR_AREA_DENSITY", \
-       "ASPECT_RATIO", "BLOCK_AVG_AREA", "BLOCK_STD_AREA", "BLOCK_AVG_FLOOR_AREA",
-       "BLOCK_STD_FLOOR_AREA", "BLOCK_AVG_VOLUME", \
-       "BLOCK_STD_VOLUME", "BLOCK_AVG_NET_COMPACTNESS", "BLOCK_STD_NET_COMPACTNESS"]), \
-"no_height" : initial_indic.drop(["BUILD_AVG_HEIGHT_ROOF",\
-       "BUILD_STD_HEIGHT_ROOF", "BUILD_AVG_FLOOR_AREA", "BUILD_STD_FLOOR_AREA",
-       "BUILD_AVG_CONTIGUITY",  "BUILD_STD_CONTIGUITY",
-       "BUILD_AVG_RAW_COMPACTNESS", "BUILD_STD_RAW_COMPACTNESS", 
-       "AVG_HEIGHT_ROOF_AREA_WEIGHTED", "STD_HEIGHT_ROOF_AREA_WEIGHTED", \
-       "FREE_EXTERNAL_FACADE_DENSITY", "BUILDING_VOLUME_DENSITY",
-       "AVG_VOLUME", "GEOM_AVG_HEIGHT_ROOF",
-       "BUILDING_FLOOR_AREA_DENSITY", \
-       "ASPECT_RATIO", "BLOCK_AVG_AREA", "BLOCK_STD_AREA", "BLOCK_AVG_FLOOR_AREA",
-       "BLOCK_STD_FLOOR_AREA", "BLOCK_AVG_VOLUME", \
-       "BLOCK_STD_VOLUME", "BLOCK_AVG_NET_COMPACTNESS", "BLOCK_STD_NET_COMPACTNESS",
-           u'BLOCK_STD_AVG_HEIGHT_ROOF_AREA_WEIGHTED',u'BLOCK_STD_STD_HEIGHT_ROOF_AREA_WEIGHTED'])}
 #3.5 in the report
 scenari["param_RF"] = scenari["default"].copy()
 scenari["param_RF"]["model_stat_params"] = [{"ntree" : nt, "min_size_node" : msn,\
@@ -184,6 +251,28 @@ scenari["param_RF"]["model_stat_params"].remove(scenari["default"]["model_stat_p
 # for nvt in [3,7,10] for md in [20, 40, 60, 80] for mln in [50, 100, 200, 300]]
 
 
+"""
+# Plot the histogram of each indicator by batch of 'nb_indic_per_fig' indicators
+nb_indic_per_fig = 12
+bin_nb = 20
+nb_fig = df.columns.size/nb_indic_per_fig
+if df.columns.size%nb_indic_per_fig != 0:
+    nb_fig += 1
+for i in range(0,nb_fig):
+    df2hist = df.loc[:, df.columns[i*nb_indic_per_fig:(i+1)*nb_indic_per_fig]]
+    fig, ax = plt.subplots()
+    df2hist.hist(bins = bin_nb, ax = ax)
+
+# Test the transformations (transformation to a more "uniform distribution")
+df_test_transfo = pmo.AnalyseData.transfo2normal(df.drop(colNotIndic, axis = 1), transfo2apply)
+for i in range(0,nb_fig):
+    df2hist = df_test_transfo.loc[:, df_test_transfo.columns[i*nb_indic_per_fig:(i+1)*nb_indic_per_fig]]
+    fig, ax = plt.subplots()
+    df2hist.hist(bins = bin_nb, ax = ax)
+"""
+print df
+# ==========================================================
+#CLASSIFICATION TESTS
 #Scenari that are calculated
 result = pd.DataFrame(columns = ["scenario", "perc_bu_calib", "dist_class_typ",\
                                  "nb_test", "indic2use", "ntree",\
@@ -221,12 +310,22 @@ for s in scenari:
             
             #Create the model object consistent with the classification model to use
             if algo2use == "regressionTree":
-                clf = tree.DecisionTreeClassifier(max_features = nb_var_tree,\
-                                                  min_samples_leaf = min_size_node)              
+                if classif == "false" or classif == "False":
+                    clf = tree.DecisionTreeRegressor(max_features = nb_var_tree,\
+                                                      min_samples_leaf = min_size_node)
+                elif classif == "true" or classif == "True":
+                    clf = tree.DecisionTreeClassifier(max_features = nb_var_tree,\
+                                                      min_samples_leaf = min_size_node)                    
             elif algo2use == "randomForest":
-                clf = RandomForestClassifier(n_estimators = ntree, max_features = nb_var_tree,\
-                                             min_samples_leaf = min_size_node, max_depth = max_depth,
-                                             max_leaf_nodes = max_leaf_nodes)
+                if classif == "false" or classif == "False":
+                    clf = RandomForestRegressor(n_estimators = ntree, max_features = nb_var_tree,\
+                                                 min_samples_leaf = min_size_node, max_depth = max_depth,
+                                                 max_leaf_nodes = max_leaf_nodes)
+                elif classif == "true" or classif == "True":
+                    clf = RandomForestClassifier(n_estimators = ntree, max_features = nb_var_tree,\
+                                                 min_samples_leaf = min_size_node, max_depth = max_depth,
+                                                 max_leaf_nodes = max_leaf_nodes)   
+
             
             for thresh_uniqueness in scenario["threshold_uniqueness"]:
                 print u"Uniqueness threshold :"+str(thresh_uniqueness*100)+"%" 
@@ -237,33 +336,39 @@ for s in scenari:
                         #Calibration and verification are performed 'nb_test' times
                         for i in range(0, nb_test):
                             print u"Calibration N° :" + str(i + 1) 
+                            # Select the data having the uniqueness value higher than a certain value
+                            data2use_i=data2use_cal[data2use_cal[uniqueness_val] >= thresh_uniqueness]
                             #Select data in order to have the same number of items
                             #per city and if final_distrib is "EQUALLY" the same number
                             #of items per class
-                            data2use_i = pmo.AnalyseData.select_from_data(data2use_cal, nb_data = nb_min_intra, final_distrib =\
+                            data2use_i = pmo.AnalyseData.select_from_data(data2use_i, nb_data = nb_min_intra, final_distrib =\
                                                                           dist_class_typ, nb_data_class = nb_min_class, 
-                                                                          uniqueness_threshold=thresh_uniqueness,
-                                                                          uniqueness_col_name=uniqueness_val)
+                                                                          distrib_col_name = typoCol,
+                                                                          classif = classif)
                             #Select for calibration a 'perc_bu_calib' building of the previous data2use_i
-                            df_calib = pmo.AnalyseData.select_from_data(data2use_i, nb_data = int(nb_min_intra*perc_bu_calib),\
-                                                                        final_distrib = "REPRESENTATIVE", 
-                                                                        uniqueness_threshold=thresh_uniqueness,
-                                                                        uniqueness_col_name=uniqueness_val).drop(uniqueness_val, axis = 1)
+                            df_calib = pmo.AnalyseData.select_from_data(data2use_i, nb_data = int(data2use_i.index.size*perc_bu_calib),\
+                                                                        final_distrib = dist_class_typ, 
+                                                                        distrib_col_name = typoCol,
+                                                                        classif=classif).drop(uniqueness_val, axis = 1)
                             #Identify the index of the buildings that are not used for calibration
                             index_not_calib = data2use_i.index.difference(df_calib.index)
                             #Select for inter verif a 'perc_bu_calib' building of the previous data2use_i
                             df_verif = pmo.AnalyseData.select_from_data(data2use_i.reindex(index_not_calib), nb_data = \
-                                                                        int(nb_min_intra*nb_min_bu_verif),\
-                                                                        final_distrib = "REPRESENTATIVE", 
-                                                                        uniqueness_threshold=thresh_uniqueness,
-                                                                        uniqueness_col_name=uniqueness_val).drop(uniqueness_val, axis = 1)
+                                                                        int(data2use_i.index.size*nb_min_bu_verif),\
+                                                                        final_distrib = dist_class_typ, 
+                                                                        distrib_col_name = typoCol,
+                                                                        classif=classif).drop(uniqueness_val, axis = 1)
                             
                             rf_model = clf.fit(df_calib.drop(typoCol, axis = 1), \
                                                df_calib[typoCol])
                             
                             pred_inter = rf_model.predict(df_verif.drop(typoCol, axis = 1))
+                            
+                            if classif == "false" or classif == "False":
+                                score_inter = metrics.mean_absolute_error(df_verif[typoCol], pred_inter)
+                            elif classif == "true" or classif == "True":
+                                score_inter = metrics.accuracy_score(df_verif[typoCol], pred_inter)
                                 
-                            score_inter = metrics.accuracy_score(df_verif[typoCol], pred_inter)
                             
                             result = result.append({"scenario" : s,\
                                                     "perc_bu_calib" : perc_bu_calib,\
@@ -280,7 +385,10 @@ for s in scenari:
                                                     "score_inter" : score_inter,\
                                                     "nb_min" : scenario["nb_min"],
                                                     "threshold_uniqueness" : thresh_uniqueness}, ignore_index = True)
-
+                            del data2use_i
+                del data2use_cal
+            del df_transf            
+        del df_indic
     
 result.to_csv(pathResults+"result2.csv")    
 

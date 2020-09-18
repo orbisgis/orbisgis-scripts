@@ -69,41 +69,66 @@ ggf.executeWorkflow(configFileWorkflowPath, pathCitiesToTreat, outputFolder, dat
 // Open a database used for calculation and load the IAUIdF file (LCZ)
 H2GIS datasource = H2GIS.open("/tmp/classification${ggf.getUuid()};AUTO_SERVER=TRUE", "sa", "")
 
-datasource.load(dependentVariablePath, dependentVarTableNameRaw)
-
-// Set the Srid of the independent variables dataset according to the dataset origin
-def sridIndependentVarIndic
-if(data == "OSM"){
-	sridIndependentVarIndic = 32631
+// Load in a list the city names that should be calculated
+def line
+def lineWithSpaces
+new File(pathCitiesToTreat).withReader('UTF-8') { reader ->
+	lineWithSpaces = reader.readLine().replace('"', '').replace("é", "e").replace("'", "_")
+	line = lineWithSpaces.replace(" ", "_")
 }
-else if(data == "BDTOPO_V2"){
-	sridIndependentVarIndic = 2154
+def areaListToProcessWithSpaces = lineWithSpaces.split(",")
+def areaListToProcess = line.split(",")
+
+// Load in a list the city names that have been calculated
+String[] pathAlreadyProcessed = new File(pathToSaveTrainingDataSet).listFiles();
+def areaListProcessed = []
+pathAlreadyProcessed.each { file ->
+  areaListProcessed << file.split("/")[-1].split("\\.")[0].split("${data.toLowerCase()}_")[-1].replace("é", "e").replace(" ", "_").replace("'", "_")
 }
 
-// Keep the 2nd potential value for the var2Model if filled
-def var2Model2Query = ""
-if(dependentVariable2ndColNameAndVal!="default"){
-	var2Model2Query = ", ${dependentVariable2ndColNameAndVal.split('=').first()}"
+// Check if there is no cities remaining to calculate the dataset
+def remainingCitiesToTreat = areaListToProcess-areaListProcessed
+println "We need to produce the dataset of the following cities : $remainingCitiesToTreat"
+if(remainingCitiesToTreat){
+	datasource.load(dependentVariablePath, dependentVarTableNameRaw)
+
+	// Set the Srid of the independent variables dataset according to the dataset origin
+	def sridIndependentVarIndic
+	if(data == "OSM"){
+		sridIndependentVarIndic = 32631
+	}
+	else if(data == "BDTOPO_V2"){
+		sridIndependentVarIndic = 2154
+	}
+
+	// Keep the 2nd potential value for the var2Model if filled
+	def var2Model2Query = ""
+	if(dependentVariable2ndColNameAndVal!="default"){
+		var2Model2Query = ", ${dependentVariable2ndColNameAndVal.split('=').first()}"
+	}
+
+	// Change the SRID of the input data and reduce the precision to make work the intersections
+	datasource.execute """ DROP TABLE IF EXISTS $dependentVarTableName;
+				CREATE TABLE $dependentVarTableName 
+					AS SELECT ST_PRECISIONREDUCER(ST_TRANSFORM(ST_SETSRID(ST_FORCE2D($geometryField),$sridDependentVarIndic), $sridIndependentVarIndic),2) AS the_geom, $dependentVariableColName $var2Model2Query
+					FROM $dependentVarTableNameRaw;
+				DROP TABLE IF EXISTS $dependentVarTableNameRaw"""
+	datasource.getSpatialTable(dependentVarTableName).the_geom.createIndex()
+	datasource.getSpatialTable(dependentVarTableName)."$dependentVariableColName".createIndex()
+
+	// For each city, gather indicators from different scales (building, block, RSU) into a single table at the scale of the training dataset
+	createTrainingDataset(datasource, areaListToProcessWithSpaces, outputFolder, data, operationsToApply, dependentVarTableName, dependentVariableColName, pathToSaveTrainingDataSet, correspondenceValMap, dependentVariable2ndColNameAndVal, resetDataset, scaleTrainingDataset, classif)
 }
-
-// Change the SRID of the input data and reduce the precision to make work the intersections
-datasource.execute """ DROP TABLE IF EXISTS $dependentVarTableName;
-			CREATE TABLE $dependentVarTableName 
-				AS SELECT ST_PRECISIONREDUCER(ST_TRANSFORM(ST_SETSRID(ST_FORCE2D($geometryField),$sridDependentVarIndic), $sridIndependentVarIndic),2) AS the_geom, $dependentVariableColName $var2Model2Query
-				FROM $dependentVarTableNameRaw;
-			DROP TABLE IF EXISTS $dependentVarTableNameRaw"""
-datasource.getSpatialTable(dependentVarTableName).the_geom.createIndex()
-datasource.getSpatialTable(dependentVarTableName)."$dependentVariableColName".createIndex()
-
-// For each city, gather indicators from different scales (building, block, RSU) into a single table at the scale of the training dataset
-createTrainingDataset(datasource, pathCitiesToTreat, outputFolder, data, operationsToApply, dependentVarTableName, dependentVariableColName, pathToSaveTrainingDataSet, correspondenceValMap, dependentVariable2ndColNameAndVal, resetDataset, scaleTrainingDataset, classif)
+else{
+	println "All cities have already their training dataset"
+}
 
 // Gather the training dataset of each city into a single table
 
 // #####################################################################
 // ################### FUNCTIONS TO USE  ###############################
 // #####################################################################
-def createTrainingDataset(JdbcDataSource datasource, String pathCitiesToTreat, String outputFolder, String data, String[] operationsToApply, String dependentVarTableName, String dependentVariableColName, String pathToSaveTrainingDataSet, def correspondenceValMap, String dependentVariable2ndColNameAndVal, Integer resetDataset, String scaleTrainingDataset, Boolean classif){
+def createTrainingDataset(JdbcDataSource datasource, String[] areaListToProcess, String outputFolder, String data, String[] operationsToApply, String dependentVarTableName, String dependentVariableColName, String pathToSaveTrainingDataSet, def correspondenceValMap, String dependentVariable2ndColNameAndVal, Integer resetDataset, String scaleTrainingDataset, Boolean classif){
 	/**
 	* For each city, gather indicators from different scales (building, block, RSU) into a single table at RSU scale and then associate the dependent variable value for the corresponding location
 	* @param configFileWorkflowPath 	The path of the config file
@@ -136,38 +161,38 @@ def createTrainingDataset(JdbcDataSource datasource, String pathCitiesToTreat, S
 	def scale1ScaleFin = "scale1_scale_fin"
 	def allFinalScaleIndic = "all_rsu_indic"
 	def trainingData = "training_data"
+	def removeAllNull = "remove_all_null"
 
 	// Define the prefix used before each value of the typology (to insure that it will be string value)
 	def prefixDependentVar = "VAL"
 
 	// List of columns to remove from the analysis in building and block tables
-	def buildColToRemove = ["THE_GEOM", "ID_RSU", "ID_BUILD", "ID_BLOCK", "NB_LEV", "ZINDEX", "MAIN_USE", "TYPE", "ID_SOURCE"]
+	def buildColToRemove = ["THE_GEOM", "ID_RSU", "ID_BUILD", "ID_BLOCK", "NB_LEV", "ZINDEX", "MAIN_USE", "TYPE", "ID_SOURCE", "ID_ZONE"]
 	def blockColToRemove = ["THE_GEOM", "ID_RSU", "ID_BLOCK", "MAIN_BUILDING_DIRECTION"]
 
 	// The  results will be saved in a specific folder depending on dataset type
-	outputFolder += data	
+	outputFolder += data
+
 	// Load in a list all cities which need to be processed
-	File[] processedAreaList = new File(outputFolder).listFiles();
-	for (areaPath in processedAreaList){
-	    	def folderName = areaPath.toString().split("/").last()
-		def areaName = folderName[data.size()+1..-1].replace("é", "e")
+	for (areaName in areaListToProcess){
 		// Define the name of the file where will be stored the data (in .geojson and .csv)
-		def outputFilePath = pathToSaveTrainingDataSet+folderName.replace(" ", "_").replace("'", "_")
-		
-		if((new File(outputFilePath+".csv")).exists() && (new File(outputFilePath+".geojson")).exists() && resetDataset != 0){
+		def outputFilePath = pathToSaveTrainingDataSet+areaName.replace(" ", "_").replace("'", "_")
+
+		if((new File(outputFilePath+".csv")).exists() && (new File(outputFilePath+".geojson")).exists() && resetDataset != 1){
 			println "'$areaName' is not recalculated since '$outputFilePath' already exists and 'resetDataset' is set to 0"
 		}
 		else{
 			println "Cross the training data with : '$areaName'"
 
+			println "Load $outputFolder/${data.toLowerCase()}_$areaName/rsu_indicators.geojson"
 			// Load RSU indicators
-			datasource.load("$areaPath/rsu_indicators.geojson", rsuIndicTempo, true)
+			datasource.load("$outputFolder/${data.toLowerCase()}_$areaName/rsu_indicators.geojson", rsuIndicTempo, true)
 
 			// Load building indicators
-			datasource.load("$areaPath/building_indicators.geojson", buildingIndicTempo, true)
+			datasource.load("$outputFolder/${data.toLowerCase()}_$areaName/building_indicators.geojson", buildingIndicTempo, true)
 
 			// Load block indicators
-			datasource.load("$areaPath/block_indicators.geojson", blockIndicTempo, true)
+			datasource.load("$outputFolder/${data.toLowerCase()}_$areaName/block_indicators.geojson", blockIndicTempo, true)
 
 			// Define default name if the 'scaleTrainingDataset' is 'RSU'	
 			def finalScaleTableName = "buildingFinalTableBeforeJoin"
@@ -232,7 +257,7 @@ def createTrainingDataset(JdbcDataSource datasource, String pathCitiesToTreat, S
 				finalScaleTableName = rsuIndicTempo
 				// Useful for merge between buildings and rsu tables
 				idbuildForMerge = "id_rsu"
-				idBlockForMerge = "id_block"
+				idBlockForMerge = "id_rsu"
 				// Useful if the classif is a regression
 				idName = "id_rsu"
 			}
@@ -301,6 +326,7 @@ def createTrainingDataset(JdbcDataSource datasource, String pathCitiesToTreat, S
 			// If the randomForest is a classification, calculate the intersection between the training dataset and the indicator at the same scale and then create a distribution table
 			if(classif){
 				datasource.getSpatialTable(allFinalScaleIndic).the_geom.createIndex()
+				datasource.getSpatialTable(dependentVarTableName).the_geom.createIndex()
 				def areaCalcQuery = "ST_AREA(ST_INTERSECTION(a.the_geom,b.the_geom))"
 				def casewhenQuery = ""
 				def sumQuery = ""
@@ -315,23 +341,23 @@ def createTrainingDataset(JdbcDataSource datasource, String pathCitiesToTreat, S
 				}
 				datasource.execute	"""DROP TABLE IF EXISTS $distributionTableBuff;
 							CREATE TABLE $distributionTableBuff
-									AS SELECT b.id_rsu, ${casewhenQuery[0..-3]}
+									AS SELECT b.$idName, ${casewhenQuery[0..-3]}
 									FROM $dependentVarTableName a, $allFinalScaleIndic b 
 									WHERE $condition2ndVal a.the_geom && b.the_geom AND ST_INTERSECTS(a.the_geom, b.the_geom)"""
 
-				datasource.getTable(distributionTableBuff).id_rsu.createIndex()
+				datasource.getTable(distributionTableBuff)."$idName".createIndex()
 
 				datasource.execute """
 									DROP TABLE IF EXISTS $distributionTable, distribution_repartition;
 									CREATE TABLE $distributionTable
-											AS SELECT id_rsu, ${sumQuery[0..-3]}
+											AS SELECT $idName, ${sumQuery[0..-3]}
 											FROM $distributionTableBuff
-											GROUP BY id_rsu;"""
+											GROUP BY $idName;"""
 
 				// The main typology and indicators characterizing the distribution are calculated
 				def computeDistribChar = Geoindicators.GenericIndicators.distributionCharacterization()
 				computeDistribChar.execute([distribTableName:   distributionTable,
-							    inputId:            "id_rsu",
+							    inputId:            idName,
 							    distribIndicator:   ["uniqueness"],
 							    extremum:           "GREATEST",
 							    prefixName:         "",
@@ -340,14 +366,16 @@ def createTrainingDataset(JdbcDataSource datasource, String pathCitiesToTreat, S
 
 				// We merge the more appropriate LCZ value to the indicators calculated using OSM data 
 				// Note that we conserve the uniqueness value to be able to select only the most unique value in the training stage
-				datasource.getTable(resultsDistrib).id_rsu.createIndex()
-				datasource.getTable(allFinalScaleIndic).id_rsu.createIndex()
+				datasource.getTable(resultsDistrib)."$idName".createIndex()
+				datasource.getTable(allFinalScaleIndic)."$idName".createIndex()
+				datasource.getTable(allFinalScaleIndic).ID_RSU.createIndex()
 				datasource.execute """ DROP TABLE IF EXISTS $trainingData;
 										CREATE TABLE $trainingData
 												AS SELECT a.EXTREMUM_COL AS $dependentVariableColName, a.UNIQUENESS_VALUE, b.*
 												FROM $resultsDistrib a 
-													RIGHT JOIN $allFinalScaleIndic b
-													ON a.id_rsu = b.id_rsu;
+													LEFT JOIN $allFinalScaleIndic b
+													ON a.$idName = b.$idName
+												WHERE b.ID_RSU IS NOT NULL;
 												"""
 			}
 			// If the randomForest is a regression, calculate a weighted average of the 'var2Model'
@@ -372,16 +400,19 @@ def createTrainingDataset(JdbcDataSource datasource, String pathCitiesToTreat, S
 							datasource      : datasource])
 				def spatialJoined = computeSpatialJoin.results.outputTableName
 
-				datasource.execute """ ALTER TABLE $spatialJoined DROP COLUMN THE_GEOM"""
+				// SELECT ONLY UNITS HAVING A "TRUE VALUE"
+				datasource.getTable(spatialJoined)."$dependentVariableColName".createIndex()
+				datasource.execute """ DROP TABLE IF EXISTS $removeAllNull; CREATE TABLE $removeAllNull AS SELECT * FROM $spatialJoined WHERE $dependentVariableColName IS NOT NULL;"""
+				datasource.execute """ ALTER TABLE $removeAllNull DROP COLUMN THE_GEOM"""
 
 				// Calculate the area weighted value of the var2Model in the target scale (the mode would be too much complicated with continuous values) AND also an indicator of uniqueness of the intersection between buildings (what proportion of building in the target table is covered by the most intersected building in the source table ?)
-				datasource.getTable(spatialJoined).id_target.createIndex()
+				datasource.getTable(removeAllNull).id_target.createIndex()
 				datasource.execute """ 	DROP TABLE IF EXISTS weighted_average;
 							CREATE TABLE weighted_average
 								AS SELECT 	id_target, 
 										SUM(AREA*$dependentVariableColName)/SUM(AREA) AS $dependentVariableColName,
 										MAX(AREA)/SUM(AREA) AS UNIQUENESS_VALUE
-								FROM $spatialJoined
+								FROM $removeAllNull
 								GROUP BY id_target;"""
 
 				// Create the training data (gathering dependent (area weighted) and independent variables)

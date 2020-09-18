@@ -4,17 +4,17 @@
 # Path of the data location
 #############################################################
 # File where are stored the list of cities to process (note that the cities to be processed should be String - even for insee codes - separated by comma and the file should be located in the same folder as the current file)
-nameFileCities="allCities.csv"
+nameFileCities="test_cities.csv"
 outputFolder="/home/decide/Data/URBIO/Donnees_brutes/LCZ/TrainingDataSets/Indicators/"
-dependentVariablePath="/home/decide/Data/URBIO/Donnees_brutes/LCZ/IAUIdF/LivraisonMeteoFrance/donnВes/LCZ.shp"
-pathToSaveTrainingDataSet="/home/decide/Data/URBIO/Donnees_brutes/LCZ/TrainingDataSets/TrainingDataset/IAUIDF/"
+dependentVariablePath="/home/decide/Documents/CloudS/LABSTICC/ClassificationSupervisee/Data/data_apprentissage.shp"
+pathToSaveTrainingDataSet="/home/decide/Data/URBIO/Donnees_brutes/UrbanTypo/BDTOPO_V2/MaPuce/TrainingDataset/"
 
 ##############################################################"
 # Parameters to set
 ##############################################################
 # II. TO CREATE THE WHOLE TRAINING DATASET
 # Scale of the dataset used to train the model (possible values: "BUILDING" or "RSU")
-scaleTrainingDataset="RSU"
+scaleTrainingDataset="BUILDING"
 # If 'scaleTrainingDataset="RSU"', operations to apply to go gather indicators to a unique scale (see the documentation concerning the IProcess unweightedOperationFromLowerScale() to know which parameters are accepted)
 operationsToApply="AVG, STD"
 # If 'resetDataset'=0, do not re-calculate the indicators for cities having already results stored in the 'pathToSaveTrainingDataSet' folder
@@ -22,22 +22,22 @@ resetDataset=0
 # Parameters of the workflow configuration file (only URBAN TYPOLOGY for most cases, LCZ if the "not statistical LCZ algorithm" should also be applied)
 indicatorUse="URBAN_TYPOLOGY"
 # Dataset to use ("OSM" or "BDTOPO_V2")
-data="OSM"
+data="BDTOPO_V2"
 # Name of the dependent variable in the table
-dependentVariableColName="TYPE_LCZ"
+dependentVariableColName="I_TYPO"
 # Name of geometric field in the table where is stored the dependent variables
 geometryField="THE_GEOM"
 # Srid of the dependent variable dataset
 sridDependentVarIndic="2154"
 # Table of correspondence between the values from the dependent variable table and values that should be used in the future (put the same value if you want them to be the same). Note that all values will be necessarily converted to string since they will be used as column values in the code
-correspondenceTable="1: 1,2: 2,3: 3,4: 4,5: 5,6: 6,7: 7,8: 8,9: 9,10: 10,A: 101,B: 102,C: 103,D: 104,E: 105,F: 106,G: 107"
+correspondenceTable="ba: 1,bgh: 2,icif: 3,icio: 4,id: 5,local: 6,pcif: 7,pcio: 8,pd: 9,psc: 10"
 # The Dependent variable may have several possible values by order of priority. If you want to focus the training only for smaples having one value, you may give the name of the variable storing the second possible value and the SQL value where it has no value... Note that if there is no second value to use, 'dependentVariable2ndColNameAndVal' should be equal to "default" 
-dependentVariable2ndColNameAndVal="LCZ2=' '"
+dependentVariable2ndColNameAndVal="default"
 # If the randomForest is a classification (classif="true") or a regression (classif="false")
 classif="true"
 
 # III. SENSITIVITY ANALYSIS OF THE RANDOM FOREST
-pathToSaveResultSensit="/home/decide/Data/URBIO/Donnees_brutes/LCZ/IAUIdF/ResultsSensitivityAnalysis/"
+pathToSaveResultSensit="/home/decide/Data/URBIO/Donnees_brutes/UrbanTypo/BDTOPO_V2/MaPuce/ResultsSensitivityAnalysis/"
 
 ##############################################################"
 # Start the scripts

@@ -49,9 +49,9 @@ def transfo2normal(df, transfo2apply):
 
 def select_from_data(df, nb_data = np.nan, nb_data_class = np.nan, distrib_col_name = \
                      "LCZ", final_distrib = "REPRESENTATIVE",
-                     uniqueness_threshold = 0.9, uniqueness_col_name = "UNIQUENESS_VALUE"):
+                     classif = "true"):
     """ Select a random sample of 'nb_data' (number of building) respecting the 
-    'final_distribution' of 'distrib_col_name' (building typology).
+    'final_distribution' of 'distrib_col_name' (building typology, LCZ, building height, etc.).
     
         Parameters
     _ _ _ _ _ _ _ _ _ _ 
@@ -70,39 +70,52 @@ def select_from_data(df, nb_data = np.nan, nb_data_class = np.nan, distrib_col_n
                     should be equal in the input and the output data
                     -> "EQUALLY" : The number of data should be similar between all classes in the output data
                     -> "RANDOM" : The distribution inside each class is not taken into account for the choice
-            uniqueness_threshold : float, default 0.9
-                We conserve only uniqueness values > uniqueness_threshold. The ratio of uniqueness
-                is an accuracy indicator assigned to an object (closer to 1, better the accuracy)
-            uniqueness_col_name : string, default "UNIQUENESS_VALUE"
-                Name of the uniqueness column
+            classif : string, default "false"
+                Whether the random forest is a classification or a regression (possible values "False", "false", "True", "true")
         Returns
     _ _ _ _ _ _ _ _ _ _ 
     
             The selected data (pd.DataFrame object)"""
     result = pd.DataFrame(columns = df.columns)
-    
-    buff = df[df[uniqueness_col_name] >= uniqueness_threshold]
+    quantiles_nb = 10
 
     if final_distrib != "RANDOM":
-        classes = sorted(set(buff[distrib_col_name]))
-    
-    if final_distrib == "REPRESENTATIVE":
-        for cl in classes:
-            buff_class = buff[buff[distrib_col_name] == cl].copy()
-            nb2keep = int(buff[distrib_col_name].value_counts(normalize = True)[cl] * nb_data)
-            data2add = buff_class.loc[random.sample(buff_class.index, \
-                                                    nb2keep),:].copy()
-            result = result.append(data2add)
+        if classif == "false" or classif == "False":
+            # Keep the quantiles as representative of the distribution
+            classes = [df[distrib_col_name].quantile(float(i)/10) for i in range(0,quantiles_nb+1)]
+        elif classif == "true" or classif == "True":
+            classes = sorted(set(df[distrib_col_name]))
+            
+    if final_distrib == "REPRESENTATIVE":            
+        for i, cl in enumerate(classes):
+            if not (i == 0 and classif == "false" or i == 0 and classif == "False"):
+                if classif == "false" or classif == "False":
+                    buff_class = df[(df[distrib_col_name] >= classes[i-1]) & \
+                                      (df[distrib_col_name] <= classes[i])].copy()
+                    nb2keep = int(1.0 / quantiles_nb * nb_data)
+                elif classif == "true" or classif == "True":
+                    buff_class = df[df[distrib_col_name] == cl].copy()
+                    nb2keep = int(df[distrib_col_name].value_counts(normalize = True)[cl] * nb_data)
+                data2add = buff_class.loc[random.sample(buff_class.index, \
+                                                        nb2keep),:].copy()
+                result = result.append(data2add)
 
     elif final_distrib == "EQUALLY":
         for cl in classes:
-            buff_class = buff[buff[distrib_col_name] == cl].copy()
+            buff_class = df[df[distrib_col_name] == cl].copy()
             data2add = buff_class.loc[random.sample(buff_class.index, nb_data_class),:].copy()
             result = result.append(data2add)
     
     elif final_distrib == "RANDOM":
-        data2add = buff.loc[random.sample(buff.index, nb_data),:].copy()
+        data2add = df.loc[random.sample(df.index, nb_data),:].copy()
         result = result.append(data2add) 
     
-    return result
+    # Some indexes may be shared between quantiles since we have
+    # "discontinuous height" - integer ==> Thus remove duplicated indexes
+    result["initial_index"] = result.index
+    result.index = pd.Index(range(0,result.index.size))
+    result = result.drop_duplicates(subset="initial_index")
+    result.index = result["initial_index"]
+
+    return result.reindex(result.index.drop_duplicates())
             

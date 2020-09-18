@@ -13,7 +13,7 @@ nameFileCitiesDep="allCitiesBDTOPO_V2.csv"
 independentVarOutputFolder="/home/decide/Data/URBIO/Donnees_brutes/LCZ/TrainingDataSets/Indicators/"
 pathToSaveTrainingDataSet="/home/decide/Data/URBIO/Donnees_brutes/BuildingHeight/BDTOPO_V2/DatasetByCity/"
 # File where are stored the list of cities to process for the independent variable dataset (note that the cities to be processed should be String - even for insee codes - separated by comma and the file should be located in the same folder as the current file)
-nameFileCitiesIndep="allCitiesOSM.csv"
+nameFileCitiesIndep="testOSM.csv"
 
 ##############################################################"
 # Parameters to set
@@ -61,6 +61,9 @@ correspondenceTable=""
 dependentVariable2ndColNameAndVal="default"
 # String to add at the end of the inputDirectory to get the right file (for example "/osm_building.geojson" for the LCZ of OSM)
 optionalinputFilePrefix="/building.geojson"
+
+# III. SENSITIVITY ANALYSIS OF THE RANDOM FOREST
+pathToSaveResultSensit="/home/decide/Data/URBIO/Donnees_brutes/BuildingHeight/BDTOPO_V2/ResultsSensitivityAnalysis/"
 
 ##############################################################"
 # Start the scripts
@@ -141,22 +144,11 @@ groovy "./calculateIndependentVariables.groovy" "$currentFolder" "$nameFileCitie
 
 echo -e "\n\n\nThe calculation of the independent variables has been performed"
 
+
+# III. OPTIMIZING THE RANDOM FOREST WITH PYTHON
 # Sensitivity analysis on random forest parameters to identify what is the optimum RF parameters for this problem
 echo -e "Python script is executing (data analysis to identify the best configuration for the RandomForest model)...\n\n\n"
-python $dataFolder"/Scripts/Result_analysis_generic.py"
+python "./classification_investigation.py" "$scaleTrainingDataset" "$dependentVariableColName" "$pathToSaveTrainingDataSet" "$data" "$currentFolder" "$pathToSaveResultSensit" "$classif"
 
 echo -e "Results from the sensitivity analysis (to identify the best configuration for the RandomForest) have been saved...\n\n\n"
 
-# Gather the results from all cities in one table selecting only independent variables that have been identified in the Python script and the spatial units having a minimum level of uniqueness.
-echo -e "Groovy script is executing (gather the results from all cities in a unique table which will be the training dataset)...\n\n\n"
-
-
-
-
-
-echo -e "Python script has been executed\n\n"
-
-echo -e "Groovy script is executed (calculation of the SVF useful for the discussion section of the article)...\n"
-groovy $dataFolder"/Scripts/SVF_calculation_discussion.groovy" $dataFolder
-
-echo -e "Groovy script has been executed\n\n"
