@@ -2,8 +2,8 @@
 This script allow to create a configuration file that may be used to store all parameters
 useful as input of the OSM geoclimate workflow (version 1_0_0-SNAPSHOT).
 ###########################################################################################*/
-//date: 2020-07
-//author: Erwan Bocher (CNRS)
+//Create on 2020-07
+//@author: Erwan Bocher (CNRS)
 
 // Declaration of the maven repository
 @GrabResolver(name='orbisgis', root='https://nexus.orbisgis.org/repository/orbisgis/')
@@ -22,7 +22,7 @@ String directory ="/tmp/geoclimate_chain"
         File dirFile = new File(directory)
         dirFile.delete()
         dirFile.mkdir()
-        def osm_parmeters = [
+        def osm_parameters = [
                 "description" :"Example of configuration file to run the OSM workflow and store the resultst in a folder",
                 "geoclimatedb" : [
                         "path" : "${dirFile.absolutePath+File.separator+"geoclimate_chain_db;AUTO_SERVER=TRUE"}",
@@ -35,7 +35,7 @@ String directory ="/tmp/geoclimate_chain"
         ]
         
 def process = Geoclimate.OSM.workflow
-process.execute(configurationFile:createOSMConfigFile(osm_parmeters, directory))
+process.execute(configurationFile:createOSMConfigFile(osm_parameters, directory))
 
 
 /**
