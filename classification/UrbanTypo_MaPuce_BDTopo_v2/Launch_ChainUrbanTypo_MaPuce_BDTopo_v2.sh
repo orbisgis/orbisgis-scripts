@@ -4,7 +4,7 @@
 # Path of the data location
 #############################################################
 # File where are stored the list of cities to process (note that the cities to be processed should be String - even for insee codes - separated by comma and the file should be located in the same folder as the current file)
-nameFileCities="test_cities.csv"
+nameFileCities="allCities.csv"
 outputFolder="/home/decide/Data/URBIO/Donnees_brutes/LCZ/TrainingDataSets/Indicators/"
 dependentVariablePath="/home/decide/Documents/CloudS/LABSTICC/ClassificationSupervisee/Data/data_apprentissage.shp"
 pathToSaveTrainingDataSet="/home/decide/Data/URBIO/Donnees_brutes/UrbanTypo/BDTOPO_V2/MaPuce/TrainingDataset/"
@@ -20,7 +20,7 @@ operationsToApply="AVG, STD"
 # If 'resetDataset'=0, do not re-calculate the indicators for cities having already results stored in the 'pathToSaveTrainingDataSet' folder
 resetDataset=0
 # Parameters of the workflow configuration file (only URBAN TYPOLOGY for most cases, LCZ if the "not statistical LCZ algorithm" should also be applied)
-indicatorUse="URBAN_TYPOLOGY"
+indicatorUse="URBAN_TYPOLOGY,LCZ"
 # Dataset to use ("OSM" or "BDTOPO_V2")
 data="BDTOPO_V2"
 # Name of the dependent variable in the table
@@ -30,7 +30,7 @@ geometryField="THE_GEOM"
 # Srid of the dependent variable dataset
 sridDependentVarIndic="2154"
 # Table of correspondence between the values from the dependent variable table and values that should be used in the future (put the same value if you want them to be the same). Note that all values will be necessarily converted to string since they will be used as column values in the code
-correspondenceTable="ba: 1,bgh: 2,icif: 3,icio: 4,id: 5,local: 6,pcif: 7,pcio: 8,pd: 9,psc: 10"
+correspondenceTable="ba:1,bgh:2,icif:3,icio:4,id:5,local:6,pcif:7,pcio:8,pd:9,psc:10"
 # The Dependent variable may have several possible values by order of priority. If you want to focus the training only for smaples having one value, you may give the name of the variable storing the second possible value and the SQL value where it has no value... Note that if there is no second value to use, 'dependentVariable2ndColNameAndVal' should be equal to "default" 
 dependentVariable2ndColNameAndVal="default"
 # If the randomForest is a classification (classif="true") or a regression (classif="false")
@@ -38,6 +38,16 @@ classif="true"
 
 # III. SENSITIVITY ANALYSIS OF THE RANDOM FOREST
 pathToSaveResultSensit="/home/decide/Data/URBIO/Donnees_brutes/UrbanTypo/BDTOPO_V2/MaPuce/ResultsSensitivityAnalysis/"
+
+# IV. CREATE THE FINAL DATASET WITH ALL CITIES
+# Whether of not the filename containing the dataset by city should contain the datasetName ('BDTOPO_V2' or 'OSM')
+datasetByCityContainsDataset=0
+# File path to save the resulting dataset WITHOUT THE EXTENSION !!
+pathToSaveFinalDataset="/home/decide/Code/Intel/geoclimate/models/TRAINING_DATA_URBAN_TYPOLOGY_BDTOPO_V2_RF_1_0"
+thresholdCol="UNIQUENESS_VALUE:0.3"
+# File where are saved all columns to use as independent variables for the training
+fileNameCol2keep="cols2Keep.csv"
+optionalinputFileSuffix=".geojson"
 
 ##############################################################"
 # Start the scripts
@@ -86,10 +96,17 @@ groovy "./calculateIndependentVariables.groovy" "$currentFolder" "$nameFileCitie
 
 echo -e "\n\n\nThe calculation of the independent variables has been performed"
 
-
+:'
 # III. OPTIMIZING THE RANDOM FOREST WITH PYTHON
 # Sensitivity analysis on random forest parameters to identify what is the optimum RF parameters for this problem
 echo -e "Python script is executing (data analysis to identify the best configuration for the RandomForest model)...\n\n\n"
 python "./classification_investigation.py" "$scaleTrainingDataset" "$dependentVariableColName" "$pathToSaveTrainingDataSet" "$data" "$currentFolder" "$pathToSaveResultSensit" "$classif"
 
 echo -e "Results from the sensitivity analysis (to identify the best configuration for the RandomForest) have been saved...\n\n\n"
+'
+
+# IV. CREATE THE FINAL DATASET WITH ALL CITIES
+echo -e "Groovy script is executing (creation of the final dataset merging all cities)...\n\n\n"
+groovy "./createFinalDataset.groovy" "$pathToSaveTrainingDataSet" "$optionalinputFileSuffix" "$pathToSaveFinalDataset" "$data" "$thresholdCol" "$dependentVariableColName" "$currentFolder/$fileNameCol2keep" "$correspondenceTable" "$currentFolder/$nameFileCities" "$datasetByCityContainsDataset"
+
+echo -e "The final dataset has been saved...\n\n\n"

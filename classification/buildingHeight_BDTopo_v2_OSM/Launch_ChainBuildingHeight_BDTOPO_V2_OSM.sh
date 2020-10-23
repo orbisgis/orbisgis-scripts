@@ -4,16 +4,18 @@
 # Path of the data location
 #############################################################
 # I. Path to save the dependent variable for each city (created from the BDTOPO_V2 data) and the final true value dataset
-outputFolderTrueValueConfigFile="/home/decide/Data/URBIO/Donnees_brutes/LCZ/TrainingDataSets/Indicators/"
-pathToSaveTrueValues="/home/decide/Data/URBIO/Donnees_brutes/LCZ/BDTOPO_V2/"
+outputFolderTrueValueConfigFile="/home/decide/Data/URBIO/Donnees_brutes/BuildingHeight/Indicators/"
+pathToSaveTrueValues="/home/decide/Data/URBIO/Donnees_brutes/BuildingHeight/BDTOPO_V2/TrueValues/"
 # File where are stored the list of cities to process for the independent variable dataset (note that the cities to be processed should be String - even for insee codes - separated by comma and the file should be located in the same folder as the current file)
 nameFileCitiesDep="allCitiesBDTOPO_V2.csv"
 
 # II. Path for the independent variables and the training dataset
-independentVarOutputFolder="/home/decide/Data/URBIO/Donnees_brutes/LCZ/TrainingDataSets/Indicators/"
+independentVarOutputFolder="/home/decide/Data/URBIO/Donnees_brutes/BuildingHeight/Indicators/"
 pathToSaveTrainingDataSet="/home/decide/Data/URBIO/Donnees_brutes/BuildingHeight/BDTOPO_V2/DatasetByCity/"
 # File where are stored the list of cities to process for the independent variable dataset (note that the cities to be processed should be String - even for insee codes - separated by comma and the file should be located in the same folder as the current file)
-nameFileCitiesIndep="testOSM.csv"
+nameFileCitiesIndep="allCitiesOSM.csv"
+
+
 
 ##############################################################"
 # Parameters to set
@@ -27,14 +29,16 @@ indicatorUseTrueValue="HEIGHT_ROOF"
 correspondenceTableTrueValue=""
 # String to add at the end of the inputDirectory to get the right file (for example "/rsu_lcz.geojson" for the LCZ of BDTOPO_V2)
 optionalinputFilePrefixTrueVal="/building.geojson"
-# Where to save the dataset that will be used as true values for the training
-outputFilePathAndName="/home/decide/Data/URBIO/Donnees_brutes/BuildingHeight/BDTOPO_V2/TrueValues/IDF_BuildingHeight_dataset20200807.geojson"
+# Where to save the dataset that will be used as true values for the training (without the extension)
+outputFilePathAndName="/home/decide/Data/URBIO/Donnees_brutes/BuildingHeight/BDTOPO_V2/TrueValues/BUILDING_HEIGHT_OSM_dataset20201020"
 # Map containing as key a field name and as value a threshold value below which data will be removed
 thresholdColumnTrueValue=""
 # The name of the variable to model
 var2ModelTrueValue="HEIGHT_ROOF"
 # List of columns to keep (except the 'varToModel' which is automatically added)
 columnsToKeep="THE_GEOM"
+# Whether of not the filename containing the dataset by city contains the datasetName ('BDTOPO_V2' or 'OSM')
+datasetByCityContainsDatasetDep=1
 
 # II. TO CREATE THE WHOLE TRAINING DATASET
 # Scale of the dataset used to train the model (possible values: "BUILDING" or "RSU")
@@ -63,7 +67,18 @@ dependentVariable2ndColNameAndVal="default"
 optionalinputFilePrefix="/building.geojson"
 
 # III. SENSITIVITY ANALYSIS OF THE RANDOM FOREST
+resetSensitivityAnalysis=0
 pathToSaveResultSensit="/home/decide/Data/URBIO/Donnees_brutes/BuildingHeight/BDTOPO_V2/ResultsSensitivityAnalysis/"
+
+# IV. CREATE THE FINAL DATASET WITH ALL CITIES
+# Whether of not the filename containing the dataset by city contains the datasetName ('BDTOPO_V2' or 'OSM')
+datasetByCityContainsDataset=0
+# File path to save the resulting dataset WITHOUT THE EXTENSION !!
+pathToSaveFinalDataset="/home/decide/Code/Intel/geoclimate/models/TRAINING_DATA_BUILDINGHEIGHT_OSM_RF_1_0"
+thresholdCol="UNIQUENESS_VALUE:0.95"
+# File where are saved all columns to use as independent variables for the training
+fileNameCol2keep="cols2Keep.csv"
+optionalinputFileSuffix=".geojson"
 
 ##############################################################"
 # Start the scripts
@@ -111,7 +126,7 @@ fi
 echo -e "Groovy script is executing (calculation of the dependent variable)...\n\n\n"
 
 
-groovy "./createTrueValues.groovy" "$currentFolder" "$nameFileCitiesDep" "$outputFolderTrueValueConfigFile" "$dataTrueValues" "$dbUrlTrueValues" "$dbIdTrueValues" "$dbPasswordTrueValues" "$pathToSaveTrueValues" "$resetDatasetTrueValue" "$indicatorUseTrueValue" "$correspondenceTableTrueValue"  "$optionalinputFilePrefixTrueVal" "$outputFilePathAndName" "$thresholdColumnTrueValue" "$var2ModelTrueValue" "$columnsToKeep"
+groovy "./createTrueValues.groovy" "$currentFolder" "$nameFileCitiesDep" "$outputFolderTrueValueConfigFile" "$dataTrueValues" "$dbUrlTrueValues" "$dbIdTrueValues" "$dbPasswordTrueValues" "$pathToSaveTrueValues" "$resetDatasetTrueValue" "$indicatorUseTrueValue" "$correspondenceTableTrueValue"  "$optionalinputFilePrefixTrueVal" "$outputFilePathAndName" "$thresholdColumnTrueValue" "$var2ModelTrueValue" "$columnsToKeep" "$currentFolder/$nameFileCitiesDep" "$datasetByCityContainsDatasetDep"
 
 echo -e "\n\n\nThe calculation of the dependent variable has been performed"
 
@@ -147,8 +162,18 @@ echo -e "\n\n\nThe calculation of the independent variables has been performed"
 
 # III. OPTIMIZING THE RANDOM FOREST WITH PYTHON
 # Sensitivity analysis on random forest parameters to identify what is the optimum RF parameters for this problem
-echo -e "Python script is executing (data analysis to identify the best configuration for the RandomForest model)...\n\n\n"
-python "./classification_investigation.py" "$scaleTrainingDataset" "$dependentVariableColName" "$pathToSaveTrainingDataSet" "$data" "$currentFolder" "$pathToSaveResultSensit" "$classif"
+if [ $resetSensitivityAnalysis -eq 1 ];
+then
+	echo -e "Python script is executing (data analysis to identify the best configuration for the RandomForest model)...\n\n\n"
+	python "./classification_investigation.py" "$scaleTrainingDataset" "$dependentVariableColName" "$pathToSaveTrainingDataSet" "$data" "$currentFolder" "$pathToSaveResultSensit" "$classif"
+	echo -e "Results from the sensitivity analysis (to identify the best configuration for the RandomForest) have been saved...\n\n\n"
+else
+	echo -e "The sensitivity analysis is not performed since the 'resetSensitivityAnalysis' parameter is not set to 1"
+fi
 
-echo -e "Results from the sensitivity analysis (to identify the best configuration for the RandomForest) have been saved...\n\n\n"
 
+# IV. CREATE THE FINAL DATASET THAT WILL BE USED FOR THE TRAINING
+echo -e "Groovy script is executing (union all selected city dataset to create the final dataset that will be used for the training)...\n\n\n"
+groovy "./createFinalDataset.groovy" "$pathToSaveTrainingDataSet" "$optionalinputFileSuffix" "$pathToSaveFinalDataset" "$data" "$thresholdCol" "$dependentVariableColName" "$currentFolder/$fileNameCol2keep" "$correspondenceTable" "$currentFolder/$nameFileCitiesIndep" "$datasetByCityContainsDataset"
+
+echo -e "The final dataset has been saved...\n\n\n"
