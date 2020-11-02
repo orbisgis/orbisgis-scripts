@@ -124,8 +124,8 @@ if (isValidProcess){
     def gridProcess = Geoindicators.SpatialUnits.createGrid()
     
     def wktReader = new WKTReader()
-    def box = wktReader.read('POLYGON((-5 -5, 5 -5, 5 5, -5 5, -5 -5))')
-    //def box = ST_GeomFromText('POLYGON((47.654114 -2.764907, 47.654114 -2.750273, 47.661746 -2.750273, 47.661746 -2.764907, 47.654114 -2.764907))',4326)
+    def box = wktReader.read('POLYGON((47.654114 -2.764907, 47.654114 -2.750273, 47.661746 -2.750273, 47.661746 -2.764907, 47.654114 -2.764907))')
+    box.setSRID(4326)
     gridProcess.execute(
         [geometry: box, 
          deltaX: 1, 
