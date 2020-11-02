@@ -103,7 +103,7 @@ def osm_parameters = [
 def process = Geoclimate.OSM.workflow
 def isValidProcess = process.execute(configurationFile:createOSMConfigFile(osm_parameters, outputDirectory))
 
-if (isValidProcess){
+if (isValidProcess) {
     /*------------------------------------------------------------
      PostGIS database properties 
     */
@@ -114,13 +114,10 @@ if (isValidProcess){
 
     def postGIS = POSTGIS.open(dbProperties)
     
-    if (location == 'database') {
-        postGIS.execute("DROP TABLE IF EXISTS GRID;")
-    }
-    
     /*------------------------------------------------------------
-     Make gridded domain with 1x1 km2 cells 
-     */
+    Make gridded domain with 1x1 km2 cells 
+    */
+    postGIS.execute("DROP TABLE IF EXISTS GRID;")
     def gridProcess = Geoindicators.SpatialUnits.createGrid()
     
     def wktReader = new WKTReader()
@@ -135,9 +132,9 @@ if (isValidProcess){
                          
     println('grid process ok')
     
-     /*------------------------------------------------------------
-     Make aggregation with previous grid and current rsu area
-     */
+    /*------------------------------------------------------------
+    Make aggregation process with previous grid and current rsu area
+    */
     def targetTableName = gridProcess.results.outputTableName
     def indicatorTableName = "rsu_lcz"
     def indicatorName = "lcz1"
