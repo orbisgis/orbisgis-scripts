@@ -111,12 +111,12 @@ if(isValidProcess){
                         url         : "jdbc:postgresql://localhost:5432/"]
 
     def postGIS = POSTGIS.open(dbProperties)
-
+    
     // Make gridded domain with 1x1 km2 cells 
     def createGridProcess = Geoindicators.SpatialUnits.createGrid()
     def wktReader = new WKTReader()
     def box = wktReader.read('POLYGON((-5 -5, 5 -5, 5 5, -5 5, -5 -5))')
-    createGridProcess.execute([box, 1, 1, 'grid', postGIS])
+    createGridProcess.execute([geometry: box, deltaX: 1, deltaY: 1, prefixName: 'grid', datasource: postGIS])
     println('grid process ok')
 
 } else {
