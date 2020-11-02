@@ -22,12 +22,12 @@ import org.locationtech.jts.io.WKTReader
 /*================================================================================
 * OUTPUT PATHS
 */
-String directory = "/perm/ms/copext/cyem/geoclimate_chain/"
+String directory = "/tmp/geoclimate_chain/"
 File dirFile = new File(directory)
 dirFile.delete()
 dirFile.mkdir()
 
-String outputDirectory = "/perm/ms/copext/cyem/outputs/"
+String outputDirectory = "/tmp/outputs/"
 File outdirFile = new File(outputDirectory)
 outdirFile.delete()
 outdirFile.mkdir()
