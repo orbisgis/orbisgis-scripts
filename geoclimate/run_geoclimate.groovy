@@ -32,7 +32,7 @@ File outdirFile = new File(outputDirectory)
 outdirFile.delete()
 outdirFile.mkdir()
 
-String location = "folder" //"folder" or "database"
+String location = "database" //"folder" or "database"
 def output = null
 
 switch(location) {
@@ -103,8 +103,10 @@ def osm_parameters = [
 def process = Geoclimate.OSM.workflow
 def isValidProcess = process.execute(configurationFile:createOSMConfigFile(osm_parameters, outputDirectory))
 
-if(isValidProcess){
-    // PostGIS database properties 
+if (isValidProcess){
+    /*------------------------------------------------------------
+     PostGIS database properties 
+    */
     def dbProperties = [databaseName: 'postgres',
                         user        : 'postgres',
                         password    : 'postgres',
@@ -112,17 +114,48 @@ if(isValidProcess){
 
     def postGIS = POSTGIS.open(dbProperties)
     
-    // Make gridded domain with 1x1 km2 cells 
-    def createGridProcess = Geoindicators.SpatialUnits.createGrid()
+    if (location == 'database') {
+        postGIS.execute("DROP TABLE IF EXISTS GRID;")
+    }
+    
+    /*------------------------------------------------------------
+     Make gridded domain with 1x1 km2 cells 
+     */
+    def gridProcess = Geoindicators.SpatialUnits.createGrid()
+    
     def wktReader = new WKTReader()
     def box = wktReader.read('POLYGON((-5 -5, 5 -5, 5 5, -5 5, -5 -5))')
-    createGridProcess.execute([geometry: box, deltaX: 1, deltaY: 1, prefixName: 'grid', datasource: postGIS])
+    //def box = ST_GeomFromText('POLYGON((47.654114 -2.764907, 47.654114 -2.750273, 47.661746 -2.750273, 47.661746 -2.764907, 47.654114 -2.764907))',4326)
+    gridProcess.execute(
+        [geometry: box, 
+         deltaX: 1, 
+         deltaY: 1, 
+         prefixName: "", 
+         datasource: postGIS])
+                         
     println('grid process ok')
+    
+     /*------------------------------------------------------------
+     Make aggregation with previous grid and current rsu area
+     */
+    def targetTableName = gridProcess.results.outputTableName
+    def indicatorTableName = "rsu_lcz"
+    def indicatorName = "lcz1"
+    
+    def upperScaleAreaStatistics = Geoindicators.GenericIndicators.upperScaleAreaStatistics()
+    upperScaleAreaStatistics.execute(
+        [upperTableName: targetTableName,
+         upperColumnId : "id",
+         lowerTableName: indicatorTableName,
+         lowerColumName: indicatorName,
+         prefixName    : "agg",
+         datasource    : postGIS])
+         
+    println('aggregation process ok')
 
 } else {
     println('Geoclimate process invalid')
 }
-
 /*================================================================================
 * FUNCTIONS
 */  
