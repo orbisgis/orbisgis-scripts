@@ -21,14 +21,14 @@ nameFileCitiesIndep="allCitiesOSM.csv"
 # I. TO CREATE THE DEPENDENT VARIABLE DATASET
 dataTrueValues="BDTOPO_V2"
 # If 'resetDatasetTrueValue'=0, do not re-calculate the dependent variable for cities having already results stored in the 'outputFolderTrueValueConfigFile' folder
-resetDatasetTrueValue=0
-indicatorUseTrueValue="LCZ"
+resetDatasetTrueValue=1
+indicatorUseTrueValue="URBAN_TYPOLOGY,LCZ"
 # If you want to modify the initial TrueValue to an other system, fill in the correspondence table (if not leave "")
 correspondenceTableTrueValue=""
 # String to add at the end of the inputDirectory to get the right file (for example "/rsu_lcz.geojson" for the LCZ of BDTOPO_V2)
 optionalinputFilePrefixTrueVal="/rsu_lcz.geojson"
 # Where to save the dataset that will be used as true values for the training
-outputFilePathAndName="/home/decide/Data/URBIO/Donnees_brutes/LCZ/BDTOPO_V2/IDF_LCZ_dataset20200806.geojson"
+outputFilePathAndName="/home/decide/Data/URBIO/Donnees_brutes/LCZ/BDTOPO_V2/BDTopo_v2_LCZ_dataset20200929.geojson"
 # Map containing as key a field name and as value a threshold value below which data will be removed
 thresholdColumnTrueValue=""
 # The name of the variable to model
@@ -45,7 +45,7 @@ classif="true"
 operationsToApply="AVG, STD"
 # If 'resetDataset'=0, do not re-calculate the indicators for cities having already results stored in the 'pathToSaveTrainingDataSet' folder
 resetDataset=0
-# Parameters of the workflow configuration file (only URBAN TYPOLOGY for most cases, LCZ if the "not statistical LCZ algorithm" should also be applied)
+# Parameters of the workflow configuration file (only URBAN TYPOLOGY for most cases, LCZ if the "not RandomForest LCZ algorithm" should also be applied)
 indicatorUse="URBAN_TYPOLOGY"
 # Dataset to use ("OSM" or "BDTOPO_V2")
 data="OSM"
@@ -63,7 +63,16 @@ dependentVariable2ndColNameAndVal="default"
 optionalinputFilePrefix="/building.geojson"
 
 # III. SENSITIVITY ANALYSIS OF THE RANDOM FOREST
+resetSensitivityAnalysis=0
 pathToSaveResultSensit="/home/decide/Data/URBIO/Donnees_brutes/LCZ/BDTOPO_V2/ResultsSensitivityAnalysis/"
+
+# IV. CREATE THE FINAL DATASET WITH ALL CITIES
+# File path to save the resulting dataset WITHOUT THE EXTENSION !!
+pathToSaveFinalDataset="/home/decide/Code/Intel/geoclimate/models/TRAINING_DATA_LCZ_OSM_RF_2_0"
+thresholdCol="UNIQUENESS_VALUE:0.7"
+# File where are saved all columns to use as independent variables for the training
+fileNameCol2keep="cols2Keep.csv"
+optionalinputFileSuffix=".geojson"
 ##############################################################"
 # Start the scripts
 ##############################################################
@@ -149,3 +158,11 @@ echo -e "Python script is executing (data analysis to identify the best configur
 python "./classification_investigation.py" "$scaleTrainingDataset" "$dependentVariableColName" "$pathToSaveTrainingDataSet" "$data" "$currentFolder" "$pathToSaveResultSensit" "$classif"
 
 echo -e "Results from the sensitivity analysis (to identify the best configuration for the RandomForest) have been saved...\n\n\n"
+
+
+
+# IV. CREATE THE FINAL DATASET THAT WILL BE USED FOR THE TRAINING
+echo -e "Groovy script is executing (union all selected city dataset to create the final dataset that will be used for the training)...\n\n\n"
+groovy "./createFinalDataset.groovy" "$pathToSaveTrainingDataSet" "$optionalinputFileSuffix" "$pathToSaveFinalDataset" "$data" "$thresholdCol" "$dependentVariableColName" "$currentFolder/$fileNameCol2keep" "$correspondenceTable" "$currentFolder/$nameFileCitiesIndep"
+
+echo -e "The final dataset has been saved...\n\n\n"

@@ -52,6 +52,8 @@ if(this.args[13]){
 }
 def var2Model = this.args[14]
 def columnsToKeep = this.args[15].replaceAll(" ", "").split(",")
+def pathFileCitiesDep = this.args[16]
+Integer datasetByCityContainsDataset = this.args[17].toInteger()
 
 
 
@@ -68,7 +70,7 @@ if(!outputSaveTrueValueFile.exists() || resetDatasetTrueValue){
 	ggf.executeWorkflow(configFilePathProduceTrueValues, pathCitiesToTreat, outputFolderTrueValueConfigFile, dataTrueValues, indicatorUseTrueValue, dbUrlTrueValues, dbIdTrueValues, dbPasswordTrueValues, resetDatasetTrueValue, optionalinputFilePrefix)
 
 	// Gather all cities in a same file to create the TrueValue dataset
-	ggf.unionCities(outputFolderTrueValueConfigFile, optionalinputFilePrefix, outputFilePathAndName, dataTrueValues, thresholdColumn, var2Model, columnsToKeep, correspondenceValMap)
+	ggf.unionCities(outputFolderTrueValueConfigFile+dataTrueValues+"/", optionalinputFilePrefix, outputFilePathAndName, dataTrueValues, thresholdColumn, var2Model, columnsToKeep, correspondenceValMap, pathFileCitiesDep, datasetByCityContainsDataset)
 }
 else{
 	println "The file where are saved true value already exists and you set 'resetDatasetTrueValue' to 0, thus no recalculation is performed"

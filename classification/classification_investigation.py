@@ -43,6 +43,7 @@ pathResults=sys.argv[6]
 classif=sys.argv[7]
 
 """
+################# BUILDING HEIGHT ############################
 name_object = "BUILDING"
 if name_object=="RSU":
     index_col = "ID_RSU"
@@ -51,17 +52,47 @@ if name_object=="BUILDING":
     index_col = "ID_BUILD"  
 
 typoCol="HEIGHT_ROOF"
-pathData="/home/decide/Data/URBIO/Donnees_brutes/BuildingHeight/BDTOPO_V2/Test/"
+pathData="/home/decide/Data/URBIO/Donnees_brutes/BuildingHeight/BDTOPO_V2/DatasetByCity/"
 dataset="OSM"
-fileNpath_defaultval_transfo="/home/decide/Code/orbisgis-scripts/classification/buildingHeight_BDTopo_v2_OSM/indicator_default_values.csv"
+fileNpath_defaultval_transfo="/home/decide/Code/orbisgis-scripts/classification/indicator_default_values.csv"
 pathResults="/home/decide/Data/URBIO/Donnees_brutes/BuildingHeight/BDTOPO_V2/ResultsSensitivityAnalysis/"
 classif="false"
+
+################# URBAN TYPOLOGY BDTOPO_V2 ############################
+name_object = "BUILDING"
+if name_object=="RSU":
+    index_col = "ID_RSU"
+
+if name_object=="BUILDING":
+    index_col = "ID_BUILD"  
+
+typoCol="I_TYPO"
+pathData="/home/decide/Data/URBIO/Donnees_brutes/UrbanTypo/BDTOPO_V2/MaPuce/TrainingDataset/"
+dataset="BDTOPO_V2"
+fileNpath_defaultval_transfo="/home/decide/Code/orbisgis-scripts/classification/indicator_default_values.csv"
+pathResults="/home/decide/Data/URBIO/Donnees_brutes/UrbanTypo/BDTOPO_V2/MaPuce/ResultsSensitivityAnalysis/"
+classif="true"
+
+################# URBAN TYPOLOGY OSM ############################
+name_object = "BUILDING"
+if name_object=="RSU":
+    index_col = "ID_RSU"
+
+if name_object=="BUILDING":
+    index_col = "ID_BUILD"  
+
+typoCol="I_TYPO"
+pathData="/home/decide/Data/URBIO/Donnees_brutes/UrbanTypo/OSM/MaPuce/TrainingDataset/"
+dataset="OSM"
+fileNpath_defaultval_transfo="/home/decide/Code/orbisgis-scripts/classification/indicator_default_values.csv"
+pathResults="/home/decide/Data/URBIO/Donnees_brutes/UrbanTypo/OSM/MaPuce/ResultsSensitivityAnalysis/"
+classif="true"
 """
 
 # ==========================================================
 #PARAMETERS TO SET
 # Minimum number of objects in the smallest class (for equaliness)
-nb_min_class = 2000
+nb_min_class = 46
 # Minimum ratio of building used for verification
 nb_min_bu_verif = 0.3
 uniqueness_val = u"UNIQUENESS_VALUE"
@@ -393,7 +424,24 @@ for s in scenari:
 result.to_csv(pathResults+"result2.csv")    
 
 
-# ==========================================================
+# =============================================================
+# ========== PRINT THE BEST COMBINATION =======================
+# =============================================================
+# Identify the 'percentileToKeep' % of best values
+percentileToKeep = 0.02
+best = result[result.score_inter>result.score_inter.quantile(1-percentileToKeep)][["score_inter", "ntree","min_size_node","nb_var_tree","max_depth","max_leaf_nodes"]]
+
+# Count the number of times each scenario is within the best
+nbScenarioInBest = best.groupby(["ntree","min_size_node","nb_var_tree","max_depth","max_leaf_nodes"], as_index=False).size()
+
+# Identify the scenario being the best (having the highest mode)
+bestScenario = pd.Series(nbScenarioInBest.idxmax(), index = nbScenarioInBest.index.names)
+
+print bestScenario
+
+# ================================================================
+# ========== PRINT ANALYSIS OF THE RESULTS =======================
+# ================================================================
 verif = "score_inter"
 
 #ANALYSIS OF THE RESULTS
