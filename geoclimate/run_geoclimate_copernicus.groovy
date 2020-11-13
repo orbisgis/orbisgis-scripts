@@ -1,12 +1,13 @@
 /*
 * This script is used to process the Geoclimate chain as part of the SLIM project (C3S consortium).
-* It has been implemented to make statistics on urban geoindicators for several UTM zones at European scale,
-* to provide information at high spatial resolution (downscaling).
+* It has been implemented to make statistics on urban geoindicators for several UTM zones 
+* at European scale, to provide information at high spatial resolution (downscaling).
 *
 * Decription
 * ----------
 * We previously generated a regular mesh in the metric system that is built with 10x10 km² domains.
-* A Land-Sea Mask filter has been applied to this mesh, that allow to keep only domains with no 'in-water' grid points.
+* A Land-Sea Mask filter has been applied to this mesh, that allow to keep only domains 
+* with no 'in-water' grid points.
 *
 * 1. The Geoclimate chain is then used a first time, to extract OSM data for each of these domains 
 *    which the coordinates have been provided by the user, to compute all the geoindicators.
@@ -42,13 +43,14 @@
 @Grab(group="org.orbisgis.orbisdata.datamanager", module="jdbc", version="1.0.1-SNAPSHOT")
 
 import org.orbisgis.orbisprocess.geoclimate.Geoclimate
+//import org.orbisgis.orbisdata.datamanager.jdbc.postgis.POSTGIS
 import org.orbisgis.orbisdata.datamanager.jdbc.h2gis.H2GIS
 import groovy.json.JsonOutput
 
 /*================================================================================
 * OUTPUT PATHS
 */
-String outputDirectory = "/tmp/outputs/"
+String outputDirectory = "/tmp/osm/"
 File outdirFile = new File(outputDirectory)
 outdirFile.delete()
 outdirFile.mkdir()
@@ -59,8 +61,8 @@ outdirFile.mkdir()
 * e.g def osmFilters = ["vannes", "redon"]
 */
 
-def osmFilters = [[48.83333,2.33333,48.91667,2.41667]]
-
+//def osmFilters = [[48.813420,2.220440,48.904449,2.471581]]
+def osmFilters = ["vannes"]
 /*================================================================================
 * output folder and files
 */
@@ -85,7 +87,7 @@ def  output = [
 * PARAMETERS
 */
 def osm_parameters = [
-        "description" :"Example of configuration file to run the OSM workflow and store the results in ${outputDirectory}",
+        "description" :"Run the OSM workflow and store the results in ${outputDirectory}",
         "geoclimatedb" : [
                 "folder" :"${outdirFile.absolutePath}",
                 "name" : "geoclimate_db;AUTO_SERVER=TRUE",
@@ -119,59 +121,58 @@ if (isValidProcess) {
     //Iterate over each osm filters to compute the indicators
     if (osmFilters && osmFilters in Collection) {
         osmFilters.eachWithIndex { osmFilter, index ->
+        
             //SubFolder name
             def folderName = osmFilter in Map?osmFilter.join("_"):osmFilter
             def subFolder = new File(outdirFile.absolutePath+File.separator+"osm_"+folderName)
-            if(subFolder.exists()){
+            
+            if (subFolder.exists()) {
                 //Process all result folders
                 //Load saved geojson files. Must be changed in the future to get the tables that are already in the database
-                h2GIS.load("${subFolder.absolutePath+File.separator+"zones.geojson"}","zones", true )
-                h2GIS.load("${subFolder.absolutePath+File.separator+"rsu_lcz.geojson"}","rsu_lcz", true )
+                h2GIS.load("${subFolder.absolutePath+File.separator+"zones.geojson"}",     "zones", true)
+                h2GIS.load("${subFolder.absolutePath+File.separator+"rsu_lcz.geojson"}", "rsu_lcz", true)
 
-                /*
-                * Make gridded domain with 1000x1000 m2 cells
-                * Note that the grid must be computed in the SRID UTM zone of the processed domain, not in WGS84
-                */
-                def gridPrefix = "corpernicus"
+                // Make gridded domain with 1000x1000 m2 cells
+                // Note that the grid must be computed in the SRID UTM zone of the processed domain, not in WGS84
+                def gridPrefix = "copernicus"
                 def gridProcess = Geoclimate.SpatialUnits.createGrid()
 
                 //Get the extend of the zone table. We think that the have only one area in the zone table
                 //Must be updated in the future
                 def box =  h2GIS.getSpatialTable("zones").getExtent()
-                if(gridProcess.execute(
+                if (gridProcess.execute(
                         [geometry: box,
-                         deltaX: 1000,
-                         deltaY: 1000,
+                         deltaX    : 1000,
+                         deltaY    : 1000,
                          prefixName: gridPrefix,
-                         datasource: h2GIS])){
-                  /*
-                  * Make aggregation process with previous grid and current rsu area
-                  */
-                    def targetTableName = gridProcess.results.outputTableName
+                         datasource: h2GIS])) {
+
+                    // Make aggregation process with previous grid and current rsu area
+                    def targetTableName    = gridProcess.results.outputTableName
                     def indicatorTableName = "rsu_lcz"
-                    def indicatorName = "lcz1"
+                    def indicatorName      = "lcz1"
 
                     def upperScaleAreaStatistics = Geoclimate.GenericIndicators.upperScaleAreaStatistics()
-                    if(upperScaleAreaStatistics.execute(
+                    if (upperScaleAreaStatistics.execute(
                             [upperTableName: targetTableName,
                              upperColumnId : "id",
                              lowerTableName: indicatorTableName,
                              lowerColumName: indicatorName,
                              prefixName    : "agg",
                              datasource    : h2GIS])){
-                        h2GIS.getSpatialTable(upperScaleAreaStatistics.results.outputTableName).save("${subFolder.absolutePath+File.separator+"grid_rsu_lcz.geojson"}", true )
+                        h2GIS.getSpatialTable(upperScaleAreaStatistics.results.outputTableName).save(
+                            "${subFolder.absolutePath+File.separator+"grid_rsu_lcz.geojson"}", true)
 
-                    }else{
+                    } else {
                         println("Cannot aggregate the LCZ data at the grid scale ${box}")
                     }
-                }else{
+                } else {
                     println("Cannot compute the grid on the area ${box}")
                 }
             }
-
         }
     }
-
+    h2GIS.close()
 } else {
     println('Geoclimate process invalid')
 }
@@ -186,7 +187,7 @@ def createOSMConfigFile(def osmParameters, def directory){
     def json = JsonOutput.toJson(osmParameters)
     def configFilePath =  directory+File.separator+"osmConfigFile.json"
     File configFile = new File(configFilePath)
-    if(configFile.exists()){
+    if (configFile.exists()){
         configFile.delete()
     }
     configFile.write(JsonOutput.prettyPrint(json))
