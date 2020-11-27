@@ -26,12 +26,6 @@
 * @author Emmanuel Renault, CNRS, 2020
 * @author Erwan Bocher, CNRS, 2020
 */
-
-System.getProperties().put("proxySet", true);
-System.setProperty("https.proxyHost", "136.156.66.108");
-System.setProperty("https.proxyPort", "3333");
-System.setProperty("OVERPASS_ENDPOINT", "http://overpass-api.de/api");
-
 /*================================================================================
 * CHECK MEMORY
 */
