@@ -261,11 +261,11 @@ def createOSMConfigFile(def osmParameters, def directory){
 * @return a list of bboxes coordinates (lat-lon)
 */
 def createOSMFiltersList(def osmFiltersFile, def directory) {
-    def bboxesFile =  new File(directory+osmFiltersFile)
-    if (bboxesFile) {
+    def jsonFile =  new File(directory+osmFiltersFile)
+    if (jsonFile.exists() && jsonFile.length()>0) {
         def jsonSlurper = new JsonSlurper()
         //parse Json file
-        def data = jsonSlurper.parse(bboxesFile)
+        def data = jsonSlurper.parse(jsonFile)
         //creating Json string
         def json = JsonOutput.toJson(data)
         //parse Json string
@@ -275,7 +275,6 @@ def createOSMFiltersList(def osmFiltersFile, def directory) {
         N.times {
             osmFiltersList.add(osmFilters["${it}"]["bbox"])    
         }
-        println(osmFiltersList)
         return osmFiltersList
     } else {
     println("File ${bboxesFile} does not exist or is empty")
