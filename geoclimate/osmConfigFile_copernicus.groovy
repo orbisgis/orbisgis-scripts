@@ -6,10 +6,10 @@
 * Decription
 * ----------
 * We previously generated a regular mesh in the metric system that is built with 10x10 km² domains.
-* A Land-Sea Mask filter has been applied to this mesh, that allow to keep only domains 
-* with no 'in-water' grid points.
+* A Land-Sea Mask filter has been applied to this mesh, that allow to keep only domains with
+* 'in-land' grid points (bboxes with only 'in-water' coordinates are not taken into account).
 *
-* 1. The Geoclimate chain is then used a first time, to extract OSM data for each of these domains 
+* 1. The Geoclimate chain is then used a first time, to extract OSM data of the specified domain, 
 *    which the coordinates have been provided by the user, to compute all the geoindicators.
 * 2. In a second hand, we call two processes defined in the chain:
      - to create 1x1 km² grid cells inside of each domain,
@@ -27,6 +27,33 @@
 * @author Erwan Bocher, CNRS, 2020
 */
 
+System.getProperties().put("proxySet", true);
+System.setProperty("https.proxyHost", "136.156.66.108");
+System.setProperty("https.proxyPort", "3333");
+System.setProperty("OVERPASS_ENDPOINT", "http://overpass-api.de/api");
+
+/*================================================================================
+* CHECK MEMORY
+*/
+import java.lang.management.*
+
+def mem = ManagementFactory.memoryMXBean
+def heapUsage = mem.heapMemoryUsage
+def nonHeapUsage = mem.nonHeapMemoryUsage
+
+println """MEMORY:
+HEAP STORAGE:
+\tcommitted = $heapUsage.committed
+\tinit = $heapUsage.init
+\tmax = $heapUsage.max
+\tused = $heapUsage.used
+NON-HEAP STORAGE:
+\tcommitted = $nonHeapUsage.committed
+\tinit = $nonHeapUsage.init
+\tmax = $nonHeapUsage.max
+\tused = $nonHeapUsage.used
+"""
+
 /*================================================================================
 * DEPENDENCIES
 */
@@ -34,7 +61,8 @@
 @GrabResolver(name="orbisgis", root="https://nexus.orbisgis.org/repository/orbisgis/")
 
 // GEOCLIMATE dependencies
-@Grab(group="org.orbisgis.orbisprocess", module="geoclimate", version="1.0.0-SNAPSHOT")
+@Grab(group="org.orbisgis.orbisprocess", module="geoclimate", version="1.0.0-SNAPSHOT", 
+      classifier="jar-with-dependencies", transitive=false)
 
 // JSON dependencies
 @Grab(group="org.codehaus.groovy", module="groovy-json", version="3.0.4")
@@ -43,32 +71,65 @@
 @Grab(group="org.orbisgis.orbisdata.datamanager", module="jdbc", version="1.0.1-SNAPSHOT")
 
 import org.orbisgis.orbisprocess.geoclimate.Geoclimate
-//import org.orbisgis.orbisdata.datamanager.jdbc.postgis.POSTGIS
 import org.orbisgis.orbisdata.datamanager.jdbc.h2gis.H2GIS
 import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
 
 /*================================================================================
 * OUTPUT PATHS
 */
-String outputDirectory = "/tmp/osm/"
+String wrkdir = "/home/ms/copext/cyem/"
+
+String directory = "/perm/ms/copext/cyem/geoclimate_chain/"
+File dirFile = new File(directory)
+dirFile.delete()
+dirFile.mkdir()
+
+String outputDirectory = "/perm/ms/copext/cyem/osm/"
 File outdirFile = new File(outputDirectory)
 outdirFile.delete()
 outdirFile.mkdir()
 
 /*================================================================================
-* OSM filter supports as input place name or bbox
-* e.g def osmFilters = [[47.654114,-2.764907,47.661746,-2.750273]]
-* e.g def osmFilters = ["vannes", "redon"]
+* OSM FILTERS supports as input place name or bbox
+* e.g def osmFilters = [[48.83333,2.33333,48.91667,2.41667]]
 */
+def osmFiltersList = createOSMFiltersList("osmFilters.json", wrkdir)
+def osmFilters = osmFiltersList
 
-//def osmFilters = [[48.813420,2.220440,48.904449,2.471581]]
-def osmFilters = ["vannes"]
+osmFilters.each {
+    new File(outdirFile, "_$it").deleteDir()
+}
+new File(outdirFile, "geoclimate_db.mv.db").delete()
+
 /*================================================================================
-* output folder and files
+* OUTPUT FOLDER AND FILES
 */
-def  output = [
-        "folder" : "$outputDirectory",
-        "tables": [
+String location = "folder" //"folder" or "database"
+def output = null
+
+switch(location) {
+    case "database":
+        output = [
+            "database": [ 
+                "user": "postgres",
+                "password": "postgres",
+                "url": "jdbc:postgresql://localhost:5432/", 
+                "tables": [
+                    "building_indicators":"building_indicators",
+                    "block_indicators":"block_indicators",
+                    "rsu_indicators":"rsu_indicators",
+                    "rsu_lcz":"rsu_lcz",
+                    "zones":"zones",
+                ]
+            ]
+	]
+	break;
+
+    case "folder":
+        output = [
+            "folder" : "$outputDirectory", 
+            "tables": [
                 "building_indicators",
                 "block_indicators",
                 "rsu_indicators",
@@ -80,16 +141,18 @@ def  output = [
                 "water",
                 "vegetation",
                 "impervious"
+            ]
         ]
-]
+        break;
+}
 
 /*================================================================================
 * PARAMETERS
 */
 def osm_parameters = [
-        "description" :"Run the OSM workflow and store the results in ${outputDirectory}",
+        "description" :"run the OSM workflow and store the results in ${outputDirectory}",
         "geoclimatedb" : [
-                "folder" :"${outdirFile.absolutePath}",
+                "folder" :"${dirFile.absolutePath}",
                 "name" : "geoclimate_db;AUTO_SERVER=TRUE",
                 "delete" : true
         ],
@@ -121,20 +184,20 @@ if (isValidProcess) {
     //Iterate over each osm filters to compute the indicators
     if (osmFilters && osmFilters in Collection) {
         osmFilters.eachWithIndex { osmFilter, index ->
-        
+
             //SubFolder name
             def folderName = osmFilter in Map?osmFilter.join("_"):osmFilter
             def subFolder = new File(outdirFile.absolutePath+File.separator+"osm_"+folderName)
-            
+
             if (subFolder.exists()) {
                 //Process all result folders
                 //Load saved geojson files. Must be changed in the future to get the tables that are already in the database
-                h2GIS.load("${subFolder.absolutePath+File.separator+"zones.geojson"}",     "zones", true)
+                h2GIS.load("${subFolder.absolutePath+File.separator+"zones.geojson"}"  , "zones"  , true)
                 h2GIS.load("${subFolder.absolutePath+File.separator+"rsu_lcz.geojson"}", "rsu_lcz", true)
 
                 // Make gridded domain with 1000x1000 m2 cells
                 // Note that the grid must be computed in the SRID UTM zone of the processed domain, not in WGS84
-                def gridPrefix = "copernicus"
+                def gridPrefix = "copernicus_${index}"
                 def gridProcess = Geoclimate.SpatialUnits.createGrid()
 
                 //Get the extend of the zone table. We think that the have only one area in the zone table
@@ -146,21 +209,25 @@ if (isValidProcess) {
                          deltaY    : 1000,
                          prefixName: gridPrefix,
                          datasource: h2GIS])) {
-
-                    // Make aggregation process with previous grid and current rsu area
+                  
+                    //Assign Zone SRID to Grid SRID
+                    def zoneSRID = h2GIS.getSpatialTable("zones").getExtent().getSRID()
                     def targetTableName    = gridProcess.results.outputTableName
+                    h2GIS.getSpatialTable(targetTableName).setSrid(zoneSRID)
+
+                    //Make aggregation process on the gridded domain at rsu scale
                     def indicatorTableName = "rsu_lcz"
                     def indicatorName      = "lcz1"
-
-                    def upperScaleAreaStatistics = Geoclimate.GenericIndicators.upperScaleAreaStatistics()
-                    if (upperScaleAreaStatistics.execute(
+                    def statProcess = Geoclimate.GenericIndicators.upperScaleAreaStatistics()
+                    if (statProcess.execute(
                             [upperTableName: targetTableName,
                              upperColumnId : "id",
                              lowerTableName: indicatorTableName,
                              lowerColumName: indicatorName,
-                             prefixName    : "agg",
-                             datasource    : h2GIS])){
-                        h2GIS.getSpatialTable(upperScaleAreaStatistics.results.outputTableName).save(
+                             prefixName    : gridPrefix,
+                             datasource    : h2GIS])) {
+
+                        h2GIS.getSpatialTable(statProcess.results.outputTableName).save(
                             "${subFolder.absolutePath+File.separator+"grid_rsu_lcz.geojson"}", true)
 
                     } else {
@@ -172,24 +239,52 @@ if (isValidProcess) {
             }
         }
     }
-    h2GIS.close()
 } else {
-    println('Geoclimate process invalid')
+    println("Geoclimate process invalid")
 }
 
 /**
- * Create a configuration file
- * @param osmParameters
- * @param directory
- * @return
- */
+* Create a configuration file
+* @param osmParameters
+* @param directory
+* @return
+*/
 def createOSMConfigFile(def osmParameters, def directory){
     def json = JsonOutput.toJson(osmParameters)
     def configFilePath =  directory+File.separator+"osmConfigFile.json"
     File configFile = new File(configFilePath)
-    if (configFile.exists()){
+    if(configFile.exists()){
         configFile.delete()
     }
     configFile.write(JsonOutput.prettyPrint(json))
     return configFile.absolutePath
 }
+
+/**
+* Create a list of OSM filters from json file
+* @param osmFilters
+* @param directory
+* @return a list of bboxes coordinates (lat-lon)
+*/
+def createOSMFiltersList(def osmFiltersFile, def directory) {
+    def bboxesFile =  new File(directory+osmFiltersFile)
+    if (bboxesFile) {
+        def jsonSlurper = new JsonSlurper()
+        //parse Json file
+        def data = jsonSlurper.parse(bboxesFile)
+        //creating Json string
+        def json = JsonOutput.toJson(data)
+        //parse Json string
+        def osmFilters = jsonSlurper.parseText(json)
+        def osmFiltersList = []
+        N = 2
+        N.times {
+            osmFiltersList.add(osmFilters["${it}"]["bbox"])    
+        }
+        println(osmFiltersList)
+        return osmFiltersList
+    } else {
+    println("File ${bboxesFile} does not exist or is empty")
+    }
+}
+
