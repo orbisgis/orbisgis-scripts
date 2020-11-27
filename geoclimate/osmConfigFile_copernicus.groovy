@@ -271,7 +271,7 @@ def createOSMFiltersList(def osmFiltersFile, def directory) {
         //parse Json string
         def osmFilters = jsonSlurper.parseText(json)
         def osmFiltersList = []
-        N = 2
+        N = osmFilters["N"]
         N.times {
             osmFiltersList.add(osmFilters["${it}"]["bbox"])    
         }
