@@ -277,7 +277,7 @@ def createOSMFiltersList(def osmFiltersFile, def directory) {
         }
         return osmFiltersList
     } else {
-    println("File ${bboxesFile} does not exist or is empty")
+    println("File ${jsonFile} does not exist or is empty")
     }
 }
 
