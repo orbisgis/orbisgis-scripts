@@ -3,25 +3,38 @@
 * It has been implemented to make statistics on urban geoindicators for several UTM zones 
 * at European scale, to provide information at high spatial resolution (downscaling).
 *
-* Decription
-* ----------
-* We previously generated a regular mesh in the metric system that is built with 10x10 km² domains.
-* A Land-Sea Mask filter has been applied to this mesh, that allow to keep only domains with
-* 'in-land' grid points (bboxes with only 'in-water' coordinates are not taken into account).
+* Decription of the process
+* ==============================
+* We previously generated a regular continuous mesh that is made of domains
+* of 1/12° spatial resolution (~10km).
+* A Land-Sea Mask provided by ECMWF has been applied to the mesh, which allow to keep only domains
+* with 'in-land' grid points (Domains having only 'in-water' grid points are not taken into account).
 *
-* 1. The Geoclimate chain is then used a first time, to extract OSM data of the specified domain, 
-*    which the coordinates have been provided by the user, to compute all the geoindicators.
-* 2. In a second hand, we call two processes defined in the chain:
-     - to create 1x1 km² grid cells inside of each domain,
-     - to aggregate all the indicators for each of these cells.
-*    
+* Specification of the algorithm
+* ------------------------------  
+* 1. Assigning a list of bounding boxes coordinates:
+*      - corresponding to 10x10 km² domains.
+*      - storing the list to a variable defined in this configuration file.
+* 2. Execution of the script to:
+*      a. run the Geoclimate chain for OSM workflow.
+*      b. to extract OSM data of the selected domains.
+*      c. to compute all the Geoindicators at RSU scale.
+* 3. Execution of a process to:
+*      - cover each domain with the creation of a grid of 1x1 km² cells.
+* 4. Execution of a process to:
+*      - fill each cell of the domain by applying spatial aggregation to a given indicator: 
+*        LCZs, building height, building density, etc.
+*     
 * Inputs
-* ----------
-* A list of bounding boxes coordinates corresponding to one or several domains of interest.
-
+* ------------------------------
+* This script can parse an input file at Json format, which contains
+* the list of the bounding boxes coordinates.
+*
 * Outputs
-* ----------
-* Data are stored as Geojson files or in database (H2GIS)
+* ------------------------------
+* Save of the results :
+*     - at Geojson format
+*     - one file per domain in a sub-directory : /tmp/osm/osm_[bbox_coordinates]
 *
 * @author Emmanuel Renault, CNRS, 2020
 * @author Erwan Bocher, CNRS, 2020
