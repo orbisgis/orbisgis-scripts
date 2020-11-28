@@ -253,7 +253,7 @@ def createOSMConfigFile(def osmParameters, def directory){
 def createOSMFiltersList(def osmFiltersFile, def directory) {
     def jsonFile =  new File(directory+osmFiltersFile)
     if (jsonFile.exists() && jsonFile.length()>0) {
-        def jsonSlurper = new jsonSlurper()
+        def jsonSlurper = new JsonSlurper()
         def data = jsonSlurper.parse(jsonFile)
         def osmFilters = jsonSlurper.parseText(JsonOutput.toJson(data))
         def osmFiltersList = []
