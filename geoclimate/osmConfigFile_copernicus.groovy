@@ -40,28 +40,6 @@
 * @author Erwan Bocher, CNRS, 2020
 */
 /*================================================================================
-* CHECK MEMORY
-*/
-import java.lang.management.*
-
-def mem = ManagementFactory.memoryMXBean
-def heapUsage = mem.heapMemoryUsage
-def nonHeapUsage = mem.nonHeapMemoryUsage
-
-println """MEMORY:
-HEAP STORAGE:
-\tcommitted = $heapUsage.committed
-\tinit = $heapUsage.init
-\tmax = $heapUsage.max
-\tused = $heapUsage.used
-NON-HEAP STORAGE:
-\tcommitted = $nonHeapUsage.committed
-\tinit = $nonHeapUsage.init
-\tmax = $nonHeapUsage.max
-\tused = $nonHeapUsage.used
-"""
-
-/*================================================================================
 * DEPENDENCIES
 */
 // MAVEN repository
@@ -233,7 +211,6 @@ if (isValidProcess) {
                              lowerColumName: indicatorName,
                              prefixName    : gridPrefix,
                              datasource    : h2GIS])) {
-
                         h2GIS.getSpatialTable(statProcess.results.outputTableName).save(
                             "${subFolder.absolutePath+File.separator+"grid_rsu_lcz.geojson"}", true)
 
@@ -269,20 +246,15 @@ def createOSMConfigFile(def osmParameters, def directory){
 
 /**
 * Create a list of OSM filters from json file
-* @param osmFilters
+* @param osmFiltersFile
 * @param directory
-* @return a list of bboxes coordinates (lat-lon)
+* @return 
 */
 def createOSMFiltersList(def osmFiltersFile, def directory) {
     def jsonFile =  new File(directory+osmFiltersFile)
     if (jsonFile.exists() && jsonFile.length()>0) {
-        def jsonSlurper = new JsonSlurper()
-        //parse Json file
-        def data = jsonSlurper.parse(jsonFile)
-        //creating Json string
-        def json = JsonOutput.toJson(data)
-        //parse Json string
-        def osmFilters = jsonSlurper.parseText(json)
+        def data = new JsonSlurper().parse(jsonFile)
+        def osmFilters = jsonSlurper.parseText(JsonOutput.toJson(data))
         def osmFiltersList = []
         N = osmFilters["N"]
         N.times {
