@@ -1,0 +1,1 @@
+{"description":"Apply the OSM workflow","geoclimatedb":{"path":"/tmp/geoclimate_db;AUTO_SERVER=TRUE","delete":true},"input":{"osm":["ORANGE"]},"output":{"folder":"/home/decide/Data/URBIO/Donnees_brutes/LCZ/TrainingDataSets/Indicators/OSM"},"parameters":{"indicatorUse":["URBAN_TYPOLOGY"],"svfSimplified":false,"prefixName":""}}

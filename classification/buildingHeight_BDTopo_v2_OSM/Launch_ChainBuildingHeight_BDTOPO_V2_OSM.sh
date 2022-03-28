@@ -75,7 +75,7 @@ pathToSaveResultSensit="/home/decide/Data/URBIO/Donnees_brutes/BuildingHeight/BD
 datasetByCityContainsDataset=0
 # File path to save the resulting dataset WITHOUT THE EXTENSION !!
 pathToSaveFinalDataset="/home/decide/Code/Intel/geoclimate/models/TRAINING_DATA_BUILDINGHEIGHT_OSM_RF_1_0"
-thresholdCol="UNIQUENESS_VALUE:0.95"
+thresholdCol="UNIQUENESS_VALUE:0.7"
 # File where are saved all columns to use as independent variables for the training
 fileNameCol2keep="cols2Keep.csv"
 optionalinputFileSuffix=".geojson"

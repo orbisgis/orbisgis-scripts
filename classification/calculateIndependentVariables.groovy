@@ -1,14 +1,15 @@
 // Declaration of the maven repository
 @GrabResolver(name='orbisgis', root='https://nexus.orbisgis.org/repository/orbisgis/')
 
+
 // Declaration of our Nexus repository, where the geoclimate project is stored
-@Grab(group='org.orbisgis.orbisprocess', module='geoclimate', version='1.0.0-SNAPSHOT', classifier='jar-with-dependencies', transitive=false)
+@Grab(group='org.orbisgis.geoclimate', module='geoclimate', version='1.0.0-SNAPSHOT')
 
 //JSON lib
 @Grab(group='org.codehaus.groovy', module='groovy-json', version='3.0.4')
 
-import org.orbisgis.orbisprocess.geoclimate.Geoclimate
-import org.orbisgis.orbisprocess.geoclimate.geoindicators.Geoindicators
+import org.orbisgis.geoclimate.Geoclimate
+import org.orbisgis.geoclimate.Geoindicators
 import org.orbisgis.orbisdata.datamanager.jdbc.h2gis.H2GIS
 import org.orbisgis.orbisdata.datamanager.jdbc.*
 import groovy.json.JsonOutput
