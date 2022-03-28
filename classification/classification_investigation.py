@@ -226,12 +226,12 @@ df_default_val.loc["RSU_AVG_MINIMUM_BUILDING_SPACING", "default_val"]=default_di
 if df.drop(colNotIndic, axis = 1).columns.difference(df_default_val.index).empty:
     df.fillna(df_default_val["default_val"], axis = 0, inplace=True)
 else:
-    print "You should define a default value for the following columns of your input data: {0}".format(df.drop(colNotIndic, axis = 1).columns.difference(df_default_val.index))
+    print("You should define a default value for the following columns of your input data: {0}".format(df.drop(colNotIndic, axis = 1).columns.difference(df_default_val.index)))
     list_df = pd.Series(df.drop(colNotIndic, axis = 1).columns.difference(df_default_val.index))
     list_df.to_csv("/home/decide/Bureau/list_indic.csv")
 
 # Minimum number of classified objects (within the entire dataset)
-nb_min_default = df.index.size*0.05
+nb_min_default = round(df.index.size*0.05)
 
 # DEFINED SENSITIVITY ANALYSIS
 #Constants
@@ -241,13 +241,13 @@ nb_class = len(sorted(set(df[typoCol])))
 #Parameters for the default case classification
 scenari = {"default" : pd.Series({"perc_bu_calib" : [0.7],\
                         "algo2use" : "randomForest",\
-                        "model_stat_params" : [{"ntree" : 500, "min_size_node" : 1,\
-                                        "nb_var_tree" : 9, "norm_indic" : False,
-                                        "max_depth" : 80, "max_leaf_nodes" : 400}],
-                        "nb_test" : 5, "indic2use" : {"default" : initial_indic},\
+                        "model_stat_params" : [{"ntree" : 500, "min_size_node" : 0.00001,\
+                                        "nb_var_tree" : 0.35, "norm_indic" : False,
+                                        "max_depth" : None, "max_leaf_nodes" : 500}],
+                        "nb_test" : 10, "indic2use" : {"default" : initial_indic},\
                         "dist_class_typ" : ["REPRESENTATIVE"],\
                         "nb_min" : nb_min_default,
-                        "threshold_uniqueness" : [0.7]})}
+                        "threshold_uniqueness" : [0.9]})}
 
 #We initialize the default parameters for all the classification cases and then
 #we set the variations of each case
@@ -259,17 +259,18 @@ scenari[nbNameObj]["perc_bu_calib"] = [0.05, 0.2, 0.35, 0.5]
 scenari["distrib_class"] = scenari["default"].copy()
 scenari["distrib_class"]["dist_class_typ"] = ["RANDOM"]
 #scenari["distrib_class"]["dist_class_typ"] = ["EQUALLY", "REPRESENTATIVE"]
-scenari["distrib_class"]["nb_min"] = nb_min_class * nb_class
+if classif == "true":
+    scenari["distrib_class"]["nb_min"] = nb_min_class * nb_class
 #3.3 in the report
 scenari["uniqueness"] = scenari["default"].copy()
-scenari["uniqueness"]["threshold_uniqueness"] = [0.3, 0.5, 0.7, 1.0]
+scenari["uniqueness"]["threshold_uniqueness"] = [0.3, 0.7, 0.9, 0.95]
 #3.5 in the report
 scenari["param_RF"] = scenari["default"].copy()
 scenari["param_RF"]["model_stat_params"] = [{"ntree" : nt, "min_size_node" : msn,\
        "nb_var_tree" : nvt, "norm_indic" : ni, "max_depth": md,
-       "max_leaf_nodes": mln} for nt in [100, 500, 1000]\
-for msn in [1, 3, 5, 7] for nvt in [3,7,9,15] for ni in [False]
-for md in [20, 40, 60, 80] for mln in [100, 200, 300, 400]]
+       "max_leaf_nodes": mln} for nt in [100, 350, 500, 650]\
+for msn in [0.0001, 0.00005, 0.00001, 0.000001] for nvt in [0.2, 0.35, 0.5] for ni in [False]
+for md in [None] for mln in [300, 500, 800, 1100]]
 scenari["param_RF"]["model_stat_params"].remove(scenari["default"]["model_stat_params"][0])
 #3.6 in the report
 #scenari["classif_algo"] = scenari["default"].copy()
@@ -301,7 +302,7 @@ for i in range(0,nb_fig):
     fig, ax = plt.subplots()
     df2hist.hist(bins = bin_nb, ax = ax)
 """
-print df
+print(df)
 # ==========================================================
 #CLASSIFICATION TESTS
 #Scenari that are calculated
@@ -310,7 +311,7 @@ result = pd.DataFrame(columns = ["scenario", "perc_bu_calib", "dist_class_typ",\
                                  "min_size_node", "nb_var_tree", "max_depth", "max_leaf_nodes", "norm_indic",\
                                  "algo2use", "score_inter", "nb_min", "threshold_uniqueness"])
 for s in scenari:
-    print "\n\nScenario : " + s
+    print("\n\nScenario : " + s)
     scenario = scenari[s].copy()
     #For each indicators combination of the scenario
     for ind_case in scenario["indic2use"]:
@@ -359,14 +360,14 @@ for s in scenari:
 
             
             for thresh_uniqueness in scenario["threshold_uniqueness"]:
-                print u"Uniqueness threshold :"+str(thresh_uniqueness*100)+"%" 
+                print(u"Uniqueness threshold :"+str(thresh_uniqueness*100)+"%") 
                 data2use_cal = df_transf.copy()
                 for dist_class_typ in scenario["dist_class_typ"]:
                     for perc_bu_calib in scenario["perc_bu_calib"]:
-                        print u"Percentage of objects used for calibration :"+str(perc_bu_calib*100)+"%" 
+                        print(u"Percentage of objects used for calibration :"+str(perc_bu_calib*100)+"%") 
                         #Calibration and verification are performed 'nb_test' times
                         for i in range(0, nb_test):
-                            print u"Calibration N° :" + str(i + 1) 
+                            print(u"Calibration N° :" + str(i + 1)) 
                             # Select the data having the uniqueness value higher than a certain value
                             data2use_i=data2use_cal[data2use_cal[uniqueness_val] >= thresh_uniqueness]
                             #Select data in order to have the same number of items
@@ -421,23 +422,27 @@ for s in scenari:
             del df_transf            
         del df_indic
     
-result.to_csv(pathResults+"result2.csv")    
+result.to_csv(pathResults+"result3.csv")    
 
 
 # =============================================================
 # ========== PRINT THE BEST COMBINATION =======================
 # =============================================================
 # Identify the 'percentileToKeep' % of best values
-percentileToKeep = 0.02
-best = result[result.score_inter>result.score_inter.quantile(1-percentileToKeep)][["score_inter", "ntree","min_size_node","nb_var_tree","max_depth","max_leaf_nodes"]]
+percentileToKeep = 1.0
+#col2keep = ["score_inter", "ntree","min_size_node","nb_var_tree","max_depth","max_leaf_nodes"]
+col2keep = ["score_inter", "ntree","min_size_node","nb_var_tree","max_leaf_nodes"]
+col2keepWscore = col2keep.copy()
+col2keepWscore.remove("score_inter")
+best = result[result.score_inter<result.score_inter.quantile(percentileToKeep)][col2keep]
 
 # Count the number of times each scenario is within the best
-nbScenarioInBest = best.groupby(["ntree","min_size_node","nb_var_tree","max_depth","max_leaf_nodes"], as_index=False).size()
+nbScenarioInBest = best.groupby(col2keepWscore, as_index=False)["score_inter"].median()
 
 # Identify the scenario being the best (having the highest mode)
 bestScenario = pd.Series(nbScenarioInBest.idxmax(), index = nbScenarioInBest.index.names)
 
-print bestScenario
+print(bestScenario)
 
 # ================================================================
 # ========== PRINT ANALYSIS OF THE RESULTS =======================
@@ -445,7 +450,7 @@ print bestScenario
 verif = "score_inter"
 
 #ANALYSIS OF THE RESULTS
-result = pd.read_csv(pathResults+"result2.csv", header = 0, index_col = 0)    
+result = pd.read_csv(pathResults+"result3.csv", header = 0, index_col = 0)    
 
 #Scenario 3.1 : influence of the building number used
 fin_data = result[(result["scenario"] == nbNameObj)|(result["scenario"]=="default")]
@@ -526,7 +531,7 @@ data2plot = {p : pd.DataFrame({val_param : \
 for p in model_stat_params.columns:
     fig, ax = plt.subplots()
     fig.suptitle(p)
-    if data2plot[p].columns.dtype_str != 'object':
+    if data2plot[p].columns.dtype.str != 'object':
         width = pd.Series(data2plot[p].columns).diff().min()/2
         data2plot[p].boxplot(positions = data2plot[p].columns, widths = width)
     else:
@@ -591,7 +596,7 @@ confusion_matrix = {}
 score_inter = {}
 rf_model = {}
 for algo2use in finalParam.keys():
-    print algo2use
+    print(algo2use)
     dic_param = finalParam[algo2use]
     df_indic = df[dic_param["indicators2use"].union(colNotIndic)].copy()
     

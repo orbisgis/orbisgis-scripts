@@ -96,7 +96,7 @@ def select_from_data(df, nb_data = np.nan, nb_data_class = np.nan, distrib_col_n
                 elif classif == "true" or classif == "True":
                     buff_class = df[df[distrib_col_name] == cl].copy()
                     nb2keep = int(df[distrib_col_name].value_counts(normalize = True)[cl] * nb_data)
-                data2add = buff_class.loc[random.sample(buff_class.index, \
+                data2add = buff_class.loc[random.sample(buff_class.index.tolist(), \
                                                         nb2keep),:].copy()
                 result = result.append(data2add)
 
@@ -107,7 +107,7 @@ def select_from_data(df, nb_data = np.nan, nb_data_class = np.nan, distrib_col_n
             result = result.append(data2add)
     
     elif final_distrib == "RANDOM":
-        data2add = df.loc[random.sample(df.index, nb_data),:].copy()
+        data2add = df.loc[random.sample(df.index.tolist(), nb_data),:].copy()
         result = result.append(data2add) 
     
     # Some indexes may be shared between quantiles since we have

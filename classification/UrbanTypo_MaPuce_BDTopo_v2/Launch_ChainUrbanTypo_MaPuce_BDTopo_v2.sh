@@ -4,10 +4,10 @@
 # Path of the data location
 #############################################################
 # File where are stored the list of cities to process (note that the cities to be processed should be String - even for insee codes - separated by comma and the file should be located in the same folder as the current file)
-nameFileCities="allCities.csv"
+nameFileCities="test_cities.csv"
 outputFolder="/home/decide/Data/URBIO/Donnees_brutes/LCZ/TrainingDataSets/Indicators/"
 dependentVariablePath="/home/decide/Documents/CloudS/LABSTICC/ClassificationSupervisee/Data/data_apprentissage.shp"
-pathToSaveTrainingDataSet="/home/decide/Data/URBIO/Donnees_brutes/UrbanTypo/BDTOPO_V2/MaPuce/TrainingDataset/"
+pathToSaveTrainingDataSet="/home/decide/Data/URBIO/Donnees_brutes/UrbanTypo/BDTOPO_V2/MaPuce/TrainingDataset2/"
 
 ##############################################################"
 # Parameters to set
@@ -43,7 +43,7 @@ pathToSaveResultSensit="/home/decide/Data/URBIO/Donnees_brutes/UrbanTypo/BDTOPO_
 # Whether of not the filename containing the dataset by city should contain the datasetName ('BDTOPO_V2' or 'OSM')
 datasetByCityContainsDataset=0
 # File path to save the resulting dataset WITHOUT THE EXTENSION !!
-pathToSaveFinalDataset="/home/decide/Code/Intel/geoclimate/models/TRAINING_DATA_URBAN_TYPOLOGY_BDTOPO_V2_RF_1_0"
+pathToSaveFinalDataset="/home/decide/Code/Intel/geoclimate/models/TRAINING_DATA_UTRF_BDTOPO_V2_RF_2_2"
 thresholdCol="UNIQUENESS_VALUE:0.3"
 # File where are saved all columns to use as independent variables for the training
 fileNameCol2keep="cols2Keep.csv"
